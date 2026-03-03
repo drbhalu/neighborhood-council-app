@@ -103,12 +103,12 @@ const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
               🗽️ Vote in Election
             </button>
 
-            {/* SELF NOMINATION BUTTON */}
+            {/* PANEL CREATION BUTTON */}
             <button
               onClick={() => onSelectOption('selfnomination')}
               className="menu-btn"
             >
-              👤 Self Nominate
+              👥 Create Panel
             </button>
 
             {/* Election results button removed per request */}

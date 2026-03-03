@@ -287,6 +287,29 @@ const ElectionVoting = ({ user, onBack }) => {
                         <p style={{ margin: '0 0 5px 0', fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>
                           {candidate.FirstName} {candidate.LastName}
                         </p>
+                        {/* panel name always shown (fallback when empty) */}
+                        <p style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#6b7280' }}>
+                          📋 Panel: {candidate.PanelName || <em>(unnamed)</em>}
+                        </p>
+                        {/* panel member list for transparency */}
+                        {candidate.PanelMembers && candidate.PanelMembers.length > 0 && (
+                          <div style={{
+                            fontSize: '12px',
+                            color: '#1f2937',
+                            marginBottom: '8px',
+                            backgroundColor: '#f0f9ff',
+                            padding: '8px',
+                            borderRadius: '4px',
+                            borderLeft: '3px solid #3b82f6'
+                          }}>
+                            <p style={{ margin: '0 0 6px 0', fontWeight: 'bold', color: '#0c4a6e' }}>👥 Panel Members:</p>
+                            {candidate.PanelMembers.map((m) => (
+                              <p key={m.CNIC} style={{ margin: 0 }}>
+                                {m.FirstName} {m.LastName}{m.Role ? ` (${m.Role})` : ''}
+                              </p>
+                            ))}
+                          </div>
+                        )}
                         <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
                           Position: {candidate.Category}
                         </p>
@@ -316,6 +339,9 @@ const ElectionVoting = ({ user, onBack }) => {
                   }}>
                     <p style={{ margin: 0, fontSize: '14px', color: '#166534' }}>
                       ✓ Selected: <strong>{selectedCandidate.FirstName} {selectedCandidate.LastName}</strong> for {selectedCandidate.Category}
+                    </p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#166534' }}>
+                      Panel: {selectedCandidate.PanelName || <em>(unnamed)</em>}
                     </p>
                   </div>
                 )}

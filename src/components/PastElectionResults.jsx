@@ -212,10 +212,53 @@ const PastElectionResults = ({ user, onBack }) => {
                                 fontSize: '16px',
                                 fontWeight: 'bold',
                                 color: positionName === 'President' ? '#2563eb' : positionName === 'Treasurer' ? '#7c3aed' : '#10b981',
-                                margin: 0
+                                margin: '0 0 12px 0'
                               }}>
                                 {winner.TotalVotes} Votes
                               </p>
+                              {winner.PanelMembers && winner.PanelMembers.length > 0 && (
+                                <div style={{
+                                  backgroundColor: 'rgba(255,255,255,0.7)',
+                                  borderRadius: '8px',
+                                  padding: '12px',
+                                  marginTop: '12px',
+                                  textAlign: 'left'
+                                }}>
+                                  <p style={{
+                                    fontSize: '12px',
+                                    fontWeight: '700',
+                                    color: positionName === 'President' ? '#0c4a6e' : positionName === 'Treasurer' ? '#4c1d95' : '#065f46',
+                                    margin: '0 0 8px 0',
+                                    textAlign: 'center'
+                                  }}>
+                                    👥 Panel Members
+                                  </p>
+                                  {winner.PanelMembers.map((member) => (
+                                    <div key={member.CNIC} style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      padding: '6px 0',
+                                      borderBottom: '1px solid rgba(0,0,0,0.1)',
+                                      fontSize: '12px'
+                                    }}>
+                                      <span style={{ fontWeight: '500' }}>
+                                        {member.FirstName} {member.LastName}
+                                      </span>
+                                      <span style={{
+                                        fontSize: '11px',
+                                        backgroundColor: member.Role === 'president' ? '#dbeafe' : member.Role === 'treasurer' ? '#ddd6fe' : '#dcfce7',
+                                        color: member.Role === 'president' ? '#0c4a6e' : member.Role === 'treasurer' ? '#4c1d95' : '#065f46',
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        fontWeight: '600'
+                                      }}>
+                                        {member.Role || 'Member'}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <p style={{ color: '#666', margin: 0, fontSize: '14px' }}>No Result</p>
@@ -265,10 +308,53 @@ const PastElectionResults = ({ user, onBack }) => {
                         fontSize: '18px',
                         fontWeight: 'bold',
                         color: positionName === 'President' ? '#2563eb' : positionName === 'Treasurer' ? '#7c3aed' : '#10b981',
-                        margin: 0
+                        margin: '0 0 12px 0'
                       }}>
                         {winner.TotalVotes} Votes
                       </p>
+                      {winner.PanelMembers && winner.PanelMembers.length > 0 && (
+                        <div style={{
+                          backgroundColor: 'rgba(255,255,255,0.7)',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          marginTop: '12px',
+                          textAlign: 'left'
+                        }}>
+                          <p style={{
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            color: positionName === 'President' ? '#0c4a6e' : positionName === 'Treasurer' ? '#4c1d95' : '#065f46',
+                            margin: '0 0 8px 0',
+                            textAlign: 'center'
+                          }}>
+                            👥 Panel Members
+                          </p>
+                          {winner.PanelMembers.map((member) => (
+                            <div key={member.CNIC} style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '6px 0',
+                              borderBottom: '1px solid rgba(0,0,0,0.1)',
+                              fontSize: '12px'
+                            }}>
+                              <span style={{ fontWeight: '500' }}>
+                                {member.FirstName} {member.LastName}
+                              </span>
+                              <span style={{
+                                fontSize: '11px',
+                                backgroundColor: member.Role === 'president' ? '#dbeafe' : member.Role === 'treasurer' ? '#ddd6fe' : '#dcfce7',
+                                color: member.Role === 'president' ? '#0c4a6e' : member.Role === 'treasurer' ? '#4c1d95' : '#065f46',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontWeight: '600'
+                              }}>
+                                {member.Role || 'Member'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p style={{ color: '#666', margin: 0, fontSize: '16px' }}>No Result</p>

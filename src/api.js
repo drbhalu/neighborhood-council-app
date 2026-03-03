@@ -226,15 +226,82 @@ export const getCandidates = async (nhcId, supporterCnic, eligibleOnly = false) 
   return response.json();
 };
 
-export const nominateSelf = async (cnic, nhcId, category) => {
-  const response = await fetch(`${API_URL}/candidates`, {
+// deprecated: individual nomination disabled
+export const nominateSelf = async () => {
+  throw new Error('Individual self-nomination is disabled. Use createPanel instead.');
+};
+
+export const getNHCMembers = async (nhcId) => {
+  const response = await fetch(`${API_URL}/nhc/${nhcId}/members`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch NHC members');
+  }
+  return response.json();
+};
+
+// panel APIs
+export const createPanel = async ({ panelName, presidentCnic, nhcId, members, treasurerCnic, viceCnic }) => {
+  const payload = { panelName, presidentCnic, nhcId };
+  // dynamic members list takes precedence; legacy fields kept for backwards compatibility
+  if (members) payload.members = members;
+  if (treasurerCnic) payload.treasurerCnic = treasurerCnic;
+  if (viceCnic) payload.viceCnic = viceCnic;
+  const response = await fetch(`${API_URL}/panels`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cnic, nhcId, category })
+    body: JSON.stringify(payload)
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to submit nomination');
+    throw new Error(err.error || 'Failed to create panel');
+  }
+  return response.json();
+};
+
+export const acceptPanelInvite = async (panelId, cnic) => {
+  const response = await fetch(`${API_URL}/panels/${panelId}/members/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cnic })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to accept invitation');
+  }
+  return response.json();
+};
+
+export const declinePanelInvite = async (panelId, cnic) => {
+  const response = await fetch(`${API_URL}/panels/${panelId}/members/decline`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cnic })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to decline invitation');
+  }
+  return response.json();
+};
+
+export const getPanels = async (filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.nhcId) params.append('nhcId', filters.nhcId);
+  if (filters.cnic) params.append('cnic', filters.cnic);
+  const response = await fetch(`${API_URL}/panels?${params.toString()}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch panels');
+  }
+  return response.json();
+};
+
+export const getPanelMembers = async (panelId) => {
+  const response = await fetch(`${API_URL}/panels/${panelId}/members`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch panel members');
   }
   return response.json();
 };

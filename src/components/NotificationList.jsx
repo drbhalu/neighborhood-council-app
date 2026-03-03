@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getNotifications } from '../api';
+import { getNotifications, acceptPanelInvite, declinePanelInvite } from '../api';
 
 const NotificationList = ({ user, onClose }) => {
   const [notifications, setNotifications] = useState([]);
@@ -39,8 +39,61 @@ const NotificationList = ({ user, onClose }) => {
             <div key={note.Id} style={{ 
                 borderBottom: '1px solid #eee', padding: '10px 0'
               }}>
-              <p style={{ margin: '0', fontSize: '14px', fontWeight: 'bold' }}>Admin Message:</p>
+              <p style={{ margin: '0', fontSize: '14px', fontWeight: 'bold' }}>Message:</p>
               <p style={{ margin: '5px 0 0 0' }}>{note.Message}</p>
+              {note.PanelId && note.Role && (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <button
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={async () => {
+                      try {
+                        await acceptPanelInvite(note.PanelId, user.cnic);
+                        // refresh list
+                        const data = await getNotifications(user.cnic);
+                        setNotifications(data);
+                        alert('Invitation accepted');
+                      } catch (err) {
+                        console.error('Failed to accept invite', err);
+                        alert('Failed to accept invitation');
+                      }
+                    }}
+                  >
+                    Accept {note.Role}
+                  </button>
+
+                  <button
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={async () => {
+                      if (!window.confirm('Are you sure you want to decline this invitation?')) return;
+                      try {
+                        await declinePanelInvite(note.PanelId, user.cnic);
+                        const data = await getNotifications(user.cnic);
+                        setNotifications(data);
+                        alert('Invitation declined');
+                      } catch (err) {
+                        console.error('Failed to decline invite', err);
+                        alert('Failed to decline invitation');
+                      }
+                    }}
+                  >
+                    Decline {note.Role}
+                  </button>
+                </div>
+              )}
               <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>
                 {new Date(note.CreatedDate).toLocaleString()}
               </p>

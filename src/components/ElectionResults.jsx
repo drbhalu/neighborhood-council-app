@@ -188,31 +188,55 @@ const ElectionResults = ({ user, onBack }) => {
                         backgroundColor: index === 0 ? '#fef3c7' : '#f0fdf4',
                         border: index === 0 ? '2px solid #f59e0b' : '2px solid #10b981',
                         borderRadius: '8px',
-                        padding: '16px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
+                        padding: '16px'
                       }}
                     >
-                      <div>
-                        <p style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
-                          {index === 0 && '🥇 '}
-                          {index === 1 && '🥈 '}
-                          {index === 2 && '🥉 '}
-                          {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
-                        </p>
-                        <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
-                          CNIC: {candidate.CNIC}
-                        </p>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: index === 0 ? '#f59e0b' : '#10b981' }}>
-                          {candidate.TotalVotes || 0}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div>
+                          <p style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+                            {index === 0 && '🥇 '}
+                            {index === 1 && '🥈 '}
+                            {index === 2 && '🥉 '}
+                            {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
+                          </p>
+                          <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
+                            CNIC: {candidate.CNIC}
+                          </p>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          Votes
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '28px', fontWeight: 'bold', color: index === 0 ? '#f59e0b' : '#10b981' }}>
+                            {candidate.TotalVotes || 0}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                            Votes
+                          </div>
                         </div>
                       </div>
+                      {candidate.PanelMembers && candidate.PanelMembers.length > 0 && (
+                        <div style={{ fontSize: '12px', color: '#1f2937', backgroundColor: 'rgba(255,255,255,0.7)', padding: '10px', borderRadius: '4px', borderLeft: '3px solid #3b82f6' }}>
+                          <p style={{ margin: '0 0 6px 0', fontWeight: 'bold', color: '#0c4a6e' }}>👥 Panel Members:</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {candidate.PanelMembers.map(m => (
+                              <div key={m.CNIC} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '2px 8px',
+                                  backgroundColor: m.Role === 'President' ? '#fbbf24' : m.Role === 'Treasurer' ? '#60a5fa' : m.Role === 'Vice President' ? '#34d399' : '#d1d5db',
+                                  color: 'white',
+                                  borderRadius: '12px',
+                                  fontSize: '10px',
+                                  fontWeight: 'bold',
+                                  minWidth: '75px',
+                                  textAlign: 'center'
+                                }}>
+                                  {m.Role}
+                                </span>
+                                <span style={{ fontWeight: '500' }}>{m.FirstName && m.LastName ? `${m.FirstName} ${m.LastName}` : m.CNIC}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -235,31 +259,55 @@ const ElectionResults = ({ user, onBack }) => {
                         backgroundColor: index === 0 ? '#fef3c7' : '#eff6ff',
                         border: index === 0 ? '2px solid #f59e0b' : '2px solid #0ea5e9',
                         borderRadius: '8px',
-                        padding: '16px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
+                        padding: '16px'
                       }}
                     >
-                      <div>
-                        <p style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
-                          {index === 0 && '🥇 '}
-                          {index === 1 && '🥈 '}
-                          {index === 2 && '🥉 '}
-                          {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
-                        </p>
-                        <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
-                          CNIC: {candidate.CNIC}
-                        </p>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: index === 0 ? '#f59e0b' : '#0ea5e9' }}>
-                          {candidate.TotalVotes || 0}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div>
+                          <p style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+                            {index === 0 && '🥇 '}
+                            {index === 1 && '🥈 '}
+                            {index === 2 && '🥉 '}
+                            {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
+                          </p>
+                          <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
+                            CNIC: {candidate.CNIC}
+                          </p>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          Votes
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '28px', fontWeight: 'bold', color: index === 0 ? '#f59e0b' : '#0ea5e9' }}>
+                            {candidate.TotalVotes || 0}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                            Votes
+                          </div>
                         </div>
                       </div>
+                      {candidate.PanelMembers && candidate.PanelMembers.length > 0 && (
+                        <div style={{ fontSize: '12px', color: '#1f2937', backgroundColor: 'rgba(255,255,255,0.5)', padding: '10px', borderRadius: '4px', borderLeft: '3px solid #3b82f6' }}>
+                          <p style={{ margin: '0 0 6px 0', fontWeight: 'bold', color: '#0c4a6e' }}>👥 Panel Members:</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {candidate.PanelMembers.map(m => (
+                              <div key={m.CNIC} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '2px 8px',
+                                  backgroundColor: m.Role === 'President' ? '#fbbf24' : m.Role === 'Treasurer' ? '#60a5fa' : m.Role === 'Vice President' ? '#34d399' : '#d1d5db',
+                                  color: 'white',
+                                  borderRadius: '12px',
+                                  fontSize: '10px',
+                                  fontWeight: 'bold',
+                                  minWidth: '75px',
+                                  textAlign: 'center'
+                                }}>
+                                  {m.Role}
+                                </span>
+                                <span style={{ fontWeight: '500' }}>{m.FirstName && m.LastName ? `${m.FirstName} ${m.LastName}` : m.CNIC}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

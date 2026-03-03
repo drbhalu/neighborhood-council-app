@@ -43,15 +43,15 @@ const Elections = ({ onBack }) => {
 
       {/* CONTENT */}
       <div style={{ padding: '30px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <p style={{ fontSize: '16px', color: '#666', marginBottom: '40px' }}>Select an option to manage elections and nominations</p>
-        
+        {/* <p style={{ fontSize: '16px', color: '#666', marginBottom: '40px' }}>Select an option to manage elections and nominations</p>
+         */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', width: '100%', maxWidth: '600px' }}>
           <button 
             className="menu-btn" 
             onClick={() => setView('nominations')}
             style={{ minHeight: '120px' }}
           >
-            🎯 NOMINATIONS
+            SHEDULE NOMINATIONS
           </button>
           
           <button 
@@ -59,7 +59,7 @@ const Elections = ({ onBack }) => {
             onClick={() => setView('elections')}
             style={{ minHeight: '120px' }}
           >
-            🗳️ ELECTIONS
+            SHEDULE ELECTIONS
           </button>
 
           <button 
@@ -67,7 +67,7 @@ const Elections = ({ onBack }) => {
             onClick={() => setView('end-nomination')}
             style={{ minHeight: '120px' }}
           >
-            🛑 END NOMINATION
+             END NOMINATION SHEDULE
           </button>
 
           <button 
@@ -75,7 +75,7 @@ const Elections = ({ onBack }) => {
             onClick={() => setView('end-election')}
             style={{ minHeight: '120px' }}
           >
-            🛑 END ELECTION
+             END ELECTION SHEDULE
           </button>
         </div>
       </div>

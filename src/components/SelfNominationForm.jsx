@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { nominateSelf, getNominations, getCandidates, getPositions } from '../api';
+import { createPanel, getNominations, getPanels, getNHCMembers, getPanelMembers, getPositions } from '../api';
 
 const SelfNominationForm = ({ user, onBack }) => {
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [panelName, setPanelName] = useState('');
+  const [positions, setPositions] = useState([]); // array of {Id, Name}
+  const [roleAssignments, setRoleAssignments] = useState({}); // roleName -> cnic
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [createdPanelId, setCreatedPanelId] = useState(null);
   const [nominationOpen, setNominationOpen] = useState(false);
   const [nominationStartDate, setNominationStartDate] = useState(null);
   const [nominationEndDate, setNominationEndDate] = useState(null);
   const [alreadyNominated, setAlreadyNominated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [positions, setPositions] = useState([]);
+  const [availableMembers, setAvailableMembers] = useState([]);
+  const [panelMemberCnics, setPanelMemberCnics] = useState(new Set());
 
-  const handleNominate = async () => {
-    if (!selectedCategory) {
-      alert('Please select a category');
+  const handleCreatePanel = async () => {
+    // only allow creation if all non-president positions are assigned
+    if (!panelName) {
+      alert('Please fill out panel name');
       return;
     }
 
@@ -29,30 +34,55 @@ const SelfNominationForm = ({ user, onBack }) => {
     }
 
     if (alreadyNominated) {
-      alert('You have already nominated.');
+      alert('You are already associated with a panel.');
+      return;
+    }
+
+    // build list of member assignments excluding president
+    const assignments = [];
+    for (const pos of positions) {
+      if (pos.Name === 'President') continue;
+      const sel = roleAssignments[pos.Name];
+      if (!sel) {
+        alert(`Please select a member for position ${pos.Name}`);
+        return;
+      }
+      if (panelMemberCnics.has(sel)) {
+        alert(`The selected ${pos.Name} is already part of another panel. Please choose someone else.`);
+        return;
+      }
+      assignments.push({ cnic: sel, role: pos.Name });
+    }
+
+    // ensure distinct CNICs
+    const cnicSet = new Set(assignments.map(a => String(a.cnic)));
+    if (cnicSet.size !== assignments.length) {
+      alert('Duplicate CNICs selected for different roles.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await nominateSelf(user.cnic, user.nhcId, selectedCategory);
-      setSuccessMessage(`✅ You have successfully nominated yourself as ${selectedCategory}!`);
-      setSelectedCategory('');
+      const result = await createPanel({
+        panelName,
+        presidentCnic: user.cnic,
+        nhcId: user.nhcId,
+        members: assignments
+      });
+      setSuccessMessage(`✅ Panel created and invitations sent! Waiting for members to accept; you will be redirected when the panel is approved.`);
       setAlreadyNominated(true);
-      setTimeout(() => {
-        onBack();
-      }, 1600);
+      setCreatedPanelId(result.panelId || null);
     } catch (err) {
-      console.error('Nomination error:', err);
+      console.error('Panel creation error:', err);
       const msg = err && err.message ? err.message : '';
-      if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('already')) {
-        alert('You have already nominated for this NHC');
+      if (msg.toLowerCase().includes('already')) {
+        alert('You have already created a panel or nomination exists');
         setAlreadyNominated(true);
       } else if (msg.toLowerCase().includes('nomination') && msg.toLowerCase().includes('open')) {
         alert('Nominations are not open today for your NHC');
         setNominationOpen(false);
       } else {
-        alert('Failed to nominate: ' + (err.message || 'Unknown error'));
+        alert('Failed to create panel: ' + (err.message || 'Unknown error'));
       }
     } finally {
       setIsSubmitting(false);
@@ -69,19 +99,13 @@ const SelfNominationForm = ({ user, onBack }) => {
           return;
         }
 
-        // Get nomination records for this NHC (use number-safe comparison)
+        // determine nomination period as before
         const nominations = await getNominations();
-        console.log('DEBUG getNominations:', nominations);
-
         const nhcRecords = (nominations || []).filter(n => Number(n.NHC_Id) === Number(user.nhcId) || Number(n.NHCId) === Number(user.nhcId));
-        console.log('DEBUG nhcRecords:', nhcRecords);
-
-        // Prefer a record whose period includes today; otherwise pick the most recent schedule
         let record = null;
         if (nhcRecords.length > 0) {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-
           const withDates = nhcRecords.map(r => {
             const startStr = String(r.NominationStartDate || r.NominationStart || r.StartDate || '').split('T')[0];
             const endStr = String(r.NominationEndDate || r.NominationEnd || r.EndDate || '').split('T')[0];
@@ -94,7 +118,6 @@ const SelfNominationForm = ({ user, onBack }) => {
             endDate.setHours(0, 0, 0, 0);
             return { raw: r, startDate, endDate };
           }).filter(Boolean);
-
           const active = withDates.find(p => today >= p.startDate && today <= p.endDate);
           if (active) {
             record = active.raw;
@@ -102,66 +125,89 @@ const SelfNominationForm = ({ user, onBack }) => {
             withDates.sort((a, b) => b.startDate - a.startDate);
             record = withDates[0].raw;
           } else {
-            // fallback to first record if no parseable dates available
             record = nhcRecords[0];
           }
         }
 
-        console.log('DEBUG chosen record:', record);
-
         if (record && (record.NominationStartDate || record.NominationEndDate)) {
-          // Parse DATE from DB string "YYYY-MM-DD" safely as local date
           const startDateStr = String(record.NominationStartDate || record.NominationStart || '').split('T')[0];
           const endDateStr = String(record.NominationEndDate || record.NominationEnd || '').split('T')[0];
-          
           const [startYear, startMonth, startDay] = startDateStr.split('-').map(Number);
           const [endYear, endMonth, endDay] = endDateStr.split('-').map(Number);
-          
           const startDate = new Date(startYear, startMonth - 1, startDay);
           const endDate = new Date(endYear, endMonth - 1, endDay);
-          // Use date-only comparison (no time) — normalize all dates to start of day
           startDate.setHours(0, 0, 0, 0);
           endDate.setHours(0, 0, 0, 0);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-          
-          console.log('DEBUG startDateStr:', startDateStr);
-          console.log('DEBUG endDateStr:', endDateStr);
-          console.log('DEBUG startDate:', startDate);
-          console.log('DEBUG endDate:', endDate);
-          console.log('DEBUG today:', today);
-          
-          // Check if today is within the range (inclusive)
           const isWithinRange = today >= startDate && today <= endDate;
-          console.log('DEBUG isWithinRange result:', isWithinRange);
-          
-          if (isWithinRange) {
-            setNominationOpen(true);
-          } else {
-            setNominationOpen(false);
-          }
+          setNominationOpen(isWithinRange);
           setNominationStartDate(record.NominationStartDate || record.NominationStart || null);
           setNominationEndDate(record.NominationEndDate || record.NominationEnd || null);
         } else {
-          console.log('DEBUG no record or dates found');
           setNominationOpen(false);
           setNominationStartDate(null);
           setNominationEndDate(null);
         }
 
-        // Load positions for category selection
+        // check if user is part of any panel already
         try {
-          const pos = await getPositions();
-          setPositions((pos || []).map(p => (p.Name || p.name)));
-        } catch (posErr) {
-          console.error('Failed to load positions', posErr);
-          setPositions(['President', 'Treasurer']);
+          const panels = await getPanels({ cnic: user.cnic });
+          setAlreadyNominated((panels || []).length > 0);
+        } catch (pmErr) {
+          console.error('Failed to check panels', pmErr);
+          setAlreadyNominated(false);
         }
 
-        // Check if user already nominated
-        const candidates = await getCandidates(user.nhcId);
-        const already = (candidates || []).some(c => String(c.CNIC) === String(user.cnic) || String(c.Cnic) === String(user.cnic));
-        setAlreadyNominated(!!already);
+        // load available members in this NHC
+        try {
+          const members = await getNHCMembers(user.nhcId);
+          setAvailableMembers(members || []);
+        } catch (memErr) {
+          console.error('Failed to load NHC members', memErr);
+          setAvailableMembers([]);
+        }
+
+        // load positions so form can render dynamic fields
+        try {
+          const pos = await getPositions();
+          setPositions(pos || []);
+          // initialize assignment map for new roles (leave existing values if any)
+          const assign = {};
+          (pos || []).forEach(p => {
+            if (p.Name && !assign[p.Name]) assign[p.Name] = '';
+          });
+          setRoleAssignments(assign);
+        } catch (posErr) {
+          console.error('Failed to load positions', posErr);
+          setPositions([]);
+        }
+
+        // load all existing panel members to filter them out from dropdown
+        try {
+          const allPanels = await getPanels({ nhcId: user.nhcId });
+          const panelCnics = new Set();
+          for (const panel of (allPanels || [])) {
+            try {
+              const members = await getPanelMembers(panel.Id);
+              if (members) {
+                members.forEach(member => {
+                  panelCnics.add(member.CNIC);
+                });
+              }
+              // also add the president
+              if (panel.PresidentCNIC) {
+                panelCnics.add(panel.PresidentCNIC);
+              }
+            } catch (memberErr) {
+              console.error(`Failed to load members for panel ${panel.Id}`, memberErr);
+            }
+          }
+          setPanelMemberCnics(panelCnics);
+        } catch (panelErr) {
+          console.error('Failed to load panels for filtering', panelErr);
+          setPanelMemberCnics(new Set());
+        }
       } catch (err) {
         console.error('Failed to load nomination state', err);
         setNominationOpen(false);
@@ -172,6 +218,34 @@ const SelfNominationForm = ({ user, onBack }) => {
     };
     loadState();
   }, [user]);
+
+  // helper flags for form validity and button state
+  const nonPresidentRoles = positions.filter(p => p.Name !== 'President');
+  const missingRole = nonPresidentRoles.some(p => !roleAssignments[p.Name]);
+  const conflictRole = nonPresidentRoles.some(p => panelMemberCnics.has(roleAssignments[p.Name] || ''));
+
+  // when a panel is created, poll its status until approved
+  useEffect(() => {
+    if (!createdPanelId) return;
+    let interval = null;
+    const check = async () => {
+      try {
+        const panels = await getPanels({}); // get all panels for user by cnic
+        const panel = (panels || []).find(p => p.Id === createdPanelId);
+        if (panel && panel.Status === 'approved') {
+          clearInterval(interval);
+          // redirect user to support/nomination page
+          onBack('nomination');
+        }
+      } catch (err) {
+        console.error('Failed to poll panel status', err);
+      }
+    };
+    interval = setInterval(check, 5000);
+    // run immediately once
+    check();
+    return () => clearInterval(interval);
+  }, [createdPanelId, onBack]);
 
   return (
     <div style={{
@@ -201,7 +275,7 @@ const SelfNominationForm = ({ user, onBack }) => {
           alignItems: 'center',
           marginBottom: '30px'
         }}>
-          <h2 style={{ margin: 0, fontSize: '24px', color: '#1f2937' }}>🎯 Self Nomination</h2>
+          <h2 style={{ margin: 0, fontSize: '24px', color: '#1f2937' }}>🎯 Panel Nomination</h2>
           <button
             onClick={onBack}
             style={{
@@ -246,7 +320,7 @@ const SelfNominationForm = ({ user, onBack }) => {
                 marginBottom: '24px',
                 color: '#065f46'
               }}>
-                ✅ You have already nominated for this NHC.
+                ✅ You are already part of a panel for this NHC.
               </div>
             ) : nominationOpen ? (
               <div style={{
@@ -277,55 +351,76 @@ const SelfNominationForm = ({ user, onBack }) => {
               </div>
             )}
 
-            {/* CATEGORY SELECTION */}
+            {/* PANEL DETAILS FORM */}
             <div style={{ marginBottom: '24px' }}>
               <label style={{
                 display: 'block',
-                marginBottom: '12px',
+                marginBottom: '8px',
                 fontSize: '16px',
                 fontWeight: '600',
                 color: '#1f2937'
-              }}>
-                Choose Position:
-              </label>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-              }}>
-                {positions.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => setSelectedCategory(category)}
+              }}>Panel Name (optional)</label>
+              <input
+                type="text"
+                value={panelName}
+                onChange={e => setPanelName(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  marginBottom: '16px'
+                }}
+              />
+
+              {panelMemberCnics.size > 0 && (
+                <div style={{
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #f59e0b',
+                  borderRadius: '6px',
+                  padding: '12px',
+                  marginBottom: '16px',
+                  fontSize: '13px',
+                  color: '#92400e'
+                }}>
+                  ℹ️ {panelMemberCnics.size} member(s) are already part of other panels and cannot be selected.
+                </div>
+              )}
+
+              {positions.filter(p => p.Name !== 'President').map(pos => (
+                <div key={pos.Name} style={{ marginBottom: '16px' }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    color: '#1f2937'
+                  }}>{pos.Name}</label>
+                  <select
+                    value={roleAssignments[pos.Name] || ''}
+                    onChange={e => setRoleAssignments(prev => ({ ...prev, [pos.Name]: e.target.value }))}
                     style={{
-                      padding: '16px',
-                      border: selectedCategory === category ? '2px solid #10b981' : '2px solid #e5e7eb',
-                      borderRadius: '8px',
-                      backgroundColor: selectedCategory === category ? '#f0fdf4' : '#ffffff',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: '600',
-                      color: selectedCategory === category ? '#10b981' : '#6b7280',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (selectedCategory !== category) {
-                        e.target.style.borderColor = '#10b981';
-                        e.target.style.backgroundColor = '#f9fafb';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selectedCategory !== category) {
-                        e.target.style.borderColor = '#e5e7eb';
-                        e.target.style.backgroundColor = '#ffffff';
-                      }
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontFamily: 'inherit',
+                      fontSize: '14px',
+                      backgroundColor: 'white',
+                      cursor: 'pointer'
                     }}
                   >
-                    {category === 'President' ? '👑' : '💼'} {category}
-                    {selectedCategory === category && ' ✓'}
-                  </button>
-                ))}
-              </div>
+                    <option value="">-- Select {pos.Name} --</option>
+                    {availableMembers.map(member => (
+                      !panelMemberCnics.has(member.CNIC) && member.CNIC !== user.cnic && !Object.values(roleAssignments).includes(member.CNIC) && (
+                        <option key={member.CNIC} value={member.CNIC}>
+                          {member.FirstName} {member.LastName} ({member.CNIC})
+                        </option>
+                      )
+                    ))}
+                  </select>
+                </div>
+              ))}
             </div>
 
             {/* ACTION BUTTONS */}
@@ -335,32 +430,30 @@ const SelfNominationForm = ({ user, onBack }) => {
               marginTop: '24px'
             }}>
               <button
-                onClick={handleNominate}
-                disabled={!selectedCategory || isSubmitting || !nominationOpen || alreadyNominated || loading}
+                onClick={handleCreatePanel}
+                disabled={missingRole || conflictRole || isSubmitting || !nominationOpen || alreadyNominated || loading}
                 style={{
                   flex: 1,
                   padding: '12px 20px',
-                  backgroundColor: (selectedCategory && !isSubmitting && nominationOpen && !alreadyNominated && !loading) ? '#10b981' : '#d1d5db',
+                  backgroundColor: (missingRole || conflictRole || isSubmitting || !nominationOpen || alreadyNominated || loading) ? '#d1d5db' : '#10b981',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
                   fontSize: '16px',
                   fontWeight: 'bold',
-                  cursor: (selectedCategory && !isSubmitting && nominationOpen && !alreadyNominated && !loading) ? 'pointer' : 'not-allowed',
+                  cursor: (missingRole || conflictRole || isSubmitting || !nominationOpen || alreadyNominated || loading) ? 'not-allowed' : 'pointer',
                   transition: 'all 0.3s ease'
                 }}
                 onMouseEnter={(e) => {
-                  if (selectedCategory && !isSubmitting && nominationOpen && !alreadyNominated && !loading) {
-                    e.target.style.backgroundColor = '#059669';
-                  }
+                  if (missingRole || conflictRole || isSubmitting || !nominationOpen || alreadyNominated || loading) return;
+                  e.target.style.backgroundColor = '#059669';
                 }}
                 onMouseLeave={(e) => {
-                  if (selectedCategory && !isSubmitting && nominationOpen && !alreadyNominated && !loading) {
-                    e.target.style.backgroundColor = '#10b981';
-                  }
+                  if (missingRole || conflictRole || isSubmitting || !nominationOpen || alreadyNominated || loading) return;
+                  e.target.style.backgroundColor = '#10b981';
                 }}
               >
-                {isSubmitting ? 'Nominating...' : (!nominationOpen ? 'Nominations Closed' : (alreadyNominated ? 'Already Nominated' : 'Nominate'))}
+                {isSubmitting ? 'Submitting...' : (!nominationOpen ? 'Nominations Closed' : (alreadyNominated ? 'Already Created Panel' : (conflictRole ? 'Member Already in Panel' : 'Create Panel')))}
               </button>
               <button
                 onClick={onBack}

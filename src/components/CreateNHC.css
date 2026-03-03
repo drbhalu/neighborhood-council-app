@@ -83,4 +83,5 @@
   color: #666;
   text-align: center;
   margin-top: 10px;
-}
+}\n/* offline placeholder styling */\n.offline-placeholder {\n  cursor: crosshair;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  color: #555;\n  padding: 20px;\n}\n.offline-placeholder p {\n  margin: 4px 0;\n}\n
+\n/* offline inputs styling */\n.offline-inputs p { margin: 6px 0; color: #555; }\n.offline-inputs textarea { resize: vertical; }\n

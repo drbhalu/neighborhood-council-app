@@ -149,6 +149,31 @@ const MemberDashboard = ({ user, onLogout }) => {
             {currentUser.nhcCode || "No Council Assigned"}
         </div>
 
+        {/* 3.5 ADD NEW NHC BUTTON */}
+        <button 
+          onClick={handleChangeCouncil}
+          style={{
+            marginBottom: '40px',
+            padding: '8px 20px',
+            backgroundColor: '#eff6ff',
+            color: '#2563eb',
+            border: '2px solid #2563eb',
+            borderRadius: '6px',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#dbeafe';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#eff6ff';
+          }}
+        >
+          Add New NHC
+        </button>
+
         {/* 4. BUTTONS */}
         <div className="dashboard-menu" style={{ width: '100%' }}>
           <button className="menu-btn">File Complaint</button>
@@ -162,11 +187,11 @@ const MemberDashboard = ({ user, onLogout }) => {
           {/* NEW: Committee button (only for officers) */}
           {isOfficer && (
             <button className="menu-btn" onClick={() => setShowCommittee(true)}>
-              👥 Committee ({currentUser.role})
+              Committee ({currentUser.role})
             </button>
           )}
           
-          <button className="menu-btn">Services</button>
+          <button className="menu-btn">SUGGESTIONS</button>
         </div>
 
       </div>
@@ -208,7 +233,7 @@ const MemberDashboard = ({ user, onLogout }) => {
               marginBottom: '30px'
             }}>
               <h2 style={{ margin: 0, fontSize: '24px', color: '#1f2937' }}>
-                👥 Committee Panel
+                Committee Panel
               </h2>
               <button
                 onClick={() => setShowCommittee(false)}
@@ -347,13 +372,19 @@ const MemberDashboard = ({ user, onLogout }) => {
         />
       )}
 
-      {/* Self Nomination Form */}
+      {/* Panel Creation Form (formerly self nomination) */}
       {selectedElectionOption === 'selfnomination' && (
         <SelfNominationForm
           user={currentUser}
-          onBack={() => {
-            setSelectedElectionOption(null);
-            setShowElectionsMenu(true);
+          onBack={(redirect) => {
+            if (redirect === 'nomination') {
+              // show nomination/support page directly
+              setSelectedElectionOption('nomination');
+              setShowElectionsMenu(false);
+            } else {
+              setSelectedElectionOption(null);
+              setShowElectionsMenu(true);
+            }
           }}
         />
       )}

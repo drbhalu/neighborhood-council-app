@@ -14,7 +14,6 @@ const EndElection = ({ onBack }) => {
       try {
         const nhcData = await getNHCList();
         setNhcList(nhcData || []);
-        
         const electionsData = await getElections();
         setElections(electionsData || []);
       } catch (error) {

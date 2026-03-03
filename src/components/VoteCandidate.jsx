@@ -360,9 +360,40 @@ const VoteCandidate = ({ user, onBack }) => {
                               )}
                             </div>
                             <div style={{ flex: 1 }}>
-                              <p style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
-                                {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
-                              </p>
+                              {candidate.PanelName && (
+                                <p style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 'bold', color: '#0369a1' }}>
+                                  📋 Panel: {candidate.PanelName}
+                                </p>
+                              )}
+                              {candidate.PanelMembers && candidate.PanelMembers.length > 0 ? (
+                                <div style={{ fontSize: '12px', color: '#1f2937', marginBottom: '8px', backgroundColor: '#f0f9ff', padding: '8px', borderRadius: '4px', borderLeft: '3px solid #3b82f6' }}>
+                                  <p style={{ margin: '0 0 6px 0', fontWeight: 'bold', color: '#0c4a6e' }}>👥 Panel Members:</p>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    {candidate.PanelMembers.map(m => (
+                                      <div key={m.CNIC} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{
+                                          display: 'inline-block',
+                                          padding: '2px 8px',
+                                          backgroundColor: m.Role === 'President' ? '#fbbf24' : m.Role === 'Treasurer' ? '#60a5fa' : m.Role === 'Vice President' ? '#34d399' : '#d1d5db',
+                                          color: 'white',
+                                          borderRadius: '12px',
+                                          fontSize: '10px',
+                                          fontWeight: 'bold',
+                                          minWidth: '75px',
+                                          textAlign: 'center'
+                                        }}>
+                                          {m.Role}
+                                        </span>
+                                        <span style={{ color: '#1f2937', fontWeight: '500' }}>{m.FirstName && m.LastName ? `${m.FirstName} ${m.LastName}` : m.CNIC}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#6b7280' }}>
+                                  {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
+                                </p>
+                              )}
                               <div style={{ margin: '6px 0', fontSize: '12px', color: '#6b7280' }}>
                                 <span>🗳️ Election Votes: <strong style={{ color: '#0ea5e9' }}>{candidate.ElectionVotes || 0}</strong></span>
                               </div>

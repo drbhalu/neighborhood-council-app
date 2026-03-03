@@ -133,7 +133,7 @@ const NominationsDate = ({ onBack }) => {
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <button className="back-btn" onClick={onBack}>← Back</button>
-          <h2 style={{ margin: 0 }}>SETNOMINATIONS</h2>
+          <h2 style={{ margin: 0 }}>SET NOMINATIONS SHEDULE</h2>
         </div>
 
         <div></div>
@@ -179,7 +179,7 @@ const NominationsDate = ({ onBack }) => {
                 <div>
                   <div style={{ backgroundColor: 'white', padding: '12px', borderRadius: '6px', marginBottom: '15px', border: '1px solid #e5e7eb' }}>
                     <p style={{ margin: '0', fontSize: '14px' }}>
-                      <span style={{ fontWeight: 'bold', color: '#0ea5e9' }}>🎯 Selected NHC:</span> {selectedNHC.name || selectedNHC.Name}
+                      <span style={{ fontWeight: 'bold', color: '#0ea5e9' }}>1Selected NHC:</span> {selectedNHC.name || selectedNHC.Name}
                     </p>
                   </div>
 

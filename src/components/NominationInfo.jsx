@@ -113,7 +113,7 @@ const NominationInfo = ({ user, onBack }) => {
           alignItems: 'center',
           marginBottom: '30px'
         }}>
-          <h2 style={{ margin: 0, fontSize: '24px', color: '#1f2937' }}>✍️ Candidates</h2>
+          <h2 style={{ margin: 0, fontSize: '24px', color: '#1f2937' }}>✍️ Panel Candidates</h2>
           <button
             onClick={onBack}
             style={{
@@ -157,10 +157,10 @@ const NominationInfo = ({ user, onBack }) => {
             textAlign: 'center'
           }}>
             <p style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#b45309' }}>
-              No candidates yet
+              No panels yet
             </p>
             <p style={{ margin: 0, fontSize: '14px', color: '#92400e' }}>
-              Be the first to nominate yourself!
+              Be the first to create a panel!
             </p>
           </div>
         ) : (
@@ -171,47 +171,92 @@ const NominationInfo = ({ user, onBack }) => {
                 border: '2px solid #10b981',
                 borderRadius: '12px',
                 padding: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
               }}>
-                <div>
-                  <h3 style={{ margin: '0 0 6px 0', fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
-                    {(candidate.FirstName && candidate.LastName) ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
-                  </h3>
-                  <p style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>
-                    {candidate.Category}
-                    {candidate.Status === 'Eligible' && (
-                      <span style={{ marginLeft: '8px', color: '#10b981', fontWeight: '600' }}>• Eligible</span>
-                    )}
+                {/* Panel Members Section */}
+                <div style={{ marginBottom: '16px' }}>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
+                    👥 Panel Members:
                   </p>
+                  {candidate.PanelMembers && candidate.PanelMembers.length > 0 ? (
+                    <div>
+                      {candidate.PanelMembers.map((member, idx) => (
+                        <div key={member.CNIC} style={{
+                          padding: '8px 0',
+                          borderBottom: idx < candidate.PanelMembers.length - 1 ? '1px solid #d1d5db' : 'none',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <div>
+                            <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                              {member.FirstName && member.LastName ? `${member.FirstName} ${member.LastName}` : member.CNIC}
+                            </span>
+                            <span style={{ marginLeft: '8px', fontSize: '13px', color: '#6b7280' }}>
+                              ({member.CNIC})
+                            </span>
+                          </div>
+                          <span style={{
+                            padding: '4px 12px',
+                            backgroundColor: member.Role === 'President' ? '#fbbf24' : member.Role === 'Treasurer' ? '#60a5fa' : '#34d399',
+                            color: 'white',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            fontWeight: '600'
+                          }}>
+                            {member.Role}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>No panel members</p>
+                  )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
-                      {candidate.SupportCount || 0}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                      Support
-                    </div>
+
+                {/* Support Section */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingTop: '12px',
+                  borderTop: '1px solid #d1d5db'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}>
+                    {candidate.Status === 'Eligible' && (
+                      <span style={{ color: '#10b981', fontWeight: '600', fontSize: '13px' }}>✅ Eligible</span>
+                    )}
                   </div>
-                  <button
-                    onClick={() => handleSupport(candidate.Id)}
-                    disabled={candidate.IsSupported || supportingId === candidate.Id || !nominationOpen}
-                    style={{
-                      padding: '10px 16px',
-                      backgroundColor: candidate.IsSupported ? '#9ca3af' : !nominationOpen ? '#9ca3af' : '#0ea5e9',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: candidate.IsSupported || supportingId === candidate.Id || !nominationOpen ? 'not-allowed' : 'pointer',
-                      fontWeight: '600',
-                      fontSize: '14px',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {supportingId === candidate.Id ? 'Supporting...' : (candidate.IsSupported ? 'Supported' : 'Support')}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
+                        {candidate.SupportCount || 0}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        Support
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleSupport(candidate.Id)}
+                      disabled={candidate.IsSupported || supportingId === candidate.Id || !nominationOpen}
+                      style={{
+                        padding: '10px 16px',
+                        backgroundColor: candidate.IsSupported ? '#9ca3af' : !nominationOpen ? '#9ca3af' : '#0ea5e9',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: candidate.IsSupported || supportingId === candidate.Id || !nominationOpen ? 'not-allowed' : 'pointer',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {supportingId === candidate.Id ? 'Supporting...' : (candidate.IsSupported ? 'Supported' : 'Support')}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
