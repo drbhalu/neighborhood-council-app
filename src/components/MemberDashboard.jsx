@@ -10,19 +10,22 @@ import SelfNominationForm from './SelfNominationForm';
 import ElectionVoting from './ElectionVoting';
 import ElectionResults from './ElectionResults';
 import PastElectionResults from './PastElectionResults';
-import { updateUser, sendRequest, getUser } from '../api';
+import FileComplaint from './FileComplaint'; // NEW: Added Import
+import { updateUser } from '../api';
 import logo from '../assets/logo.png';
-
-const MemberDashboard = ({ user, onLogout }) => {
+ 
+const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }) => {
   const [currentUser, setCurrentUser] = useState(user);
   const [isEditing, setIsEditing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false); // FIX: Added State
   const [showElectionsMenu, setShowElectionsMenu] = useState(false);
   const [selectedElectionOption, setSelectedElectionOption] = useState(null);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [requestMessage, setRequestMessage] = useState('');
-  const [isSendingRequest, setIsSendingRequest] = useState(false);
+  // previously used for modal, now handled on separate page
   const [showCommittee, setShowCommittee] = useState(false);
+  const [showComplaintForm, setShowComplaintForm] = useState(false); // NEW: Added State for Complaint Form
+
+  // Check if user has multiple NHCs
+  const hasMultipleNHCs = user && user.nhcOptions && user.nhcOptions.length > 1;
 
   // Check if user has a positional role (is a committee member)
   const isOfficer = ['President', 'Treasurer', 'Vice President'].includes(currentUser.role);
@@ -38,49 +41,31 @@ const MemberDashboard = ({ user, onLogout }) => {
     }
   };
 
-  const handleRequestNHC = async () => {
-    try {
-      const fresh = await getUser(currentUser.cnic);
-      const address = fresh && (fresh.Address || fresh.address) ? (fresh.Address || fresh.address) : (currentUser.address || 'Not provided');
-      const location = fresh && (fresh.Location || fresh.location) ? (fresh.Location || fresh.location) : (currentUser.location || 'Not provided');
-      const defaultMessage = `📍 Location: ${location}\n\n📮 Address: ${address}\n\nReason for requesting new NHC:`;
-      setRequestMessage(defaultMessage);
-      setShowRequestModal(true);
-    } catch (error) {
-      console.error(error);
-      alert('Failed to fetch your location and address');
+  // this handler will be provided by parent (App.jsx) to navigate to request page
+  const handleRequestNHC = () => {
+    if (typeof onRequestNHCPage === 'function') {
+      onRequestNHCPage();
     }
   };
 
-  const handleSendRequest = async () => {
-    if (!requestMessage || requestMessage.trim() === '') return alert('Please enter a message');
-    setIsSendingRequest(true);
-    try {
-      await sendRequest({
-        firstName: currentUser.firstName,
-        lastName: currentUser.lastName,
-        cnic: currentUser.cnic,
-        requestType: 'Create NHC',
-        message: requestMessage,
-        location: currentUser.location || ''
-      });
-      alert('Request sent to Admin!');
-      setShowRequestModal(false);
-    } catch (err) {
-      console.error(err);
-      alert('Failed to send request');
-    } finally {
-      setIsSendingRequest(false);
-    }
-  };
 
   const handleChangeCouncil = async () => {
-    const newCode = prompt("Enter New NHC Code (if known):");
+    const newCode = prompt("Enter New NHC Code (leave blank to cancel):");
     if (newCode) {
       try {
-        await updateUser(currentUser.cnic, { ...currentUser, nhcCode: newCode });
-        setCurrentUser({ ...currentUser, nhcCode: newCode });
-        alert("Council Updated!");
+        // combine with existing codes (comma-separated)
+        const existing = currentUser.nhcCode || '';
+        const parts = existing
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+        if (!parts.includes(newCode.trim())) {
+          parts.push(newCode.trim());
+        }
+        const updated = parts.join(', ');
+        await updateUser(currentUser.cnic, { ...currentUser, nhcCode: updated });
+        setCurrentUser({ ...currentUser, nhcCode: updated });
+        alert("Council list updated!");
       } catch(e) { alert("Error updating council"); }
     }
   };
@@ -98,6 +83,30 @@ const MemberDashboard = ({ user, onLogout }) => {
       
       {/* HEADER */}
       <div className="dashboard-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+         {/* LEFT: Back button if multiple NHCs */}
+         <div style={{ display: 'flex', alignItems: 'center' }}>
+           {hasMultipleNHCs && (
+             <button
+               onClick={() => {
+                 if (typeof onBackToChooseNHC === 'function') {
+                   onBackToChooseNHC();
+                 }
+               }}
+               style={{
+                 background: 'none',
+                 border: 'none',
+                 fontSize: '24px',
+                 cursor: 'pointer',
+                 color: '#2563eb',
+                 marginRight: '15px'
+               }}
+               title="Back to NHC selection"
+             >
+               ← Back
+             </button>
+           )}
+         </div>
+         
          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             {/* THE LOGO */}
             <img src={logo} alt="Logo" style={{ height: '130px', width: 'auto' }} />
@@ -151,7 +160,7 @@ const MemberDashboard = ({ user, onLogout }) => {
 
         {/* 3.5 ADD NEW NHC BUTTON */}
         <button 
-          onClick={handleChangeCouncil}
+          onClick={handleRequestNHC}
           style={{
             marginBottom: '40px',
             padding: '8px 20px',
@@ -176,7 +185,19 @@ const MemberDashboard = ({ user, onLogout }) => {
 
         {/* 4. BUTTONS */}
         <div className="dashboard-menu" style={{ width: '100%' }}>
-          <button className="menu-btn">File Complaint</button>
+          <button 
+            className="menu-btn" 
+            onClick={() => {
+              // Validate if user has an NHC allocation
+              if (!currentUser.nhcCode) {
+                alert('⚠️ You must be allocated to an NHC to file a complaint.\n\nPlease request to join an NHC first.');
+                return;
+              }
+              setShowComplaintForm(true);
+            }}
+          >
+            File Complaint
+          </button>
           
           {/* FIX: Added onClick handler */}
           <button className="menu-btn" onClick={() => setShowNotifications(true)}>Notifications</button>
@@ -199,6 +220,17 @@ const MemberDashboard = ({ user, onLogout }) => {
       {/* FIX: Added Notification Modal */}
       {showNotifications && (
         <NotificationList user={currentUser} onClose={() => setShowNotifications(false)} />
+      )}
+
+      {/* NEW: File Complaint Form */}
+      {showComplaintForm && (
+        <FileComplaint 
+          user={currentUser} 
+          onClose={() => setShowComplaintForm(false)}
+          onSuccess={() => {
+            // Optional: refresh data or show success message
+          }}
+        />
       )}
 
       {/* NEW: Committee Panel */}
@@ -422,41 +454,6 @@ const MemberDashboard = ({ user, onLogout }) => {
         />
       )}
 
-      {showRequestModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000,
-          display: 'flex', justifyContent: 'center', alignItems: 'center'
-        }}>
-          <div style={{ backgroundColor: 'white', padding: 20, borderRadius: 8, width: '90%', maxWidth: 500 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ margin: 0 }}>Request New NHC</h3>
-              <button onClick={() => setShowRequestModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}>✕</button>
-            </div>
-            <div style={{ backgroundColor: '#f0f9ff', padding: 12, borderRadius: 6, marginBottom: 12, border: '1px solid #0ea5e9' }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Your Information:</p>
-              <p style={{ margin: '4px 0', fontSize: '13px' }}><span style={{ fontWeight: 'bold', color: '#0ea5e9' }}>📍 Location:</span> {requestMessage.split('\n')[0].replace('📍 Location: ', '')}</p>
-              <p style={{ margin: '4px 0', fontSize: '13px' }}><span style={{ fontWeight: 'bold', color: '#059669' }}>📮 Address:</span> {requestMessage.split('Address: ')[1]?.split('\n')[0] || 'N/A'}</p>
-            </div>
-            <label style={{ display: 'block', marginBottom: 8, fontSize: '14px', fontWeight: 'bold', color: '#374151' }}>Additional Details:</label>
-            <textarea
-              value={requestMessage.includes('Reason for requesting new NHC:') ? requestMessage.split('Reason for requesting new NHC:')[1] : ''}
-              onChange={(e) => {
-                const location = requestMessage.split('📍 Location: ')[1].split('\n')[0];
-                const address = requestMessage.split('📮 Address: ')[1].split('\n')[0];
-                setRequestMessage(`📍 Location: ${location}\n\n📮 Address: ${address}\n\nReason for requesting new NHC:${e.target.value}`);
-              }}
-              placeholder="Explain why you need a new NHC..."
-              rows={6}
-              style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-              <button className="menu-btn" onClick={() => setShowRequestModal(false)}>Cancel</button>
-              <button className="submit-btn" onClick={handleSendRequest} disabled={isSendingRequest}>{isSendingRequest ? 'Sending...' : 'Send Request'}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* FOOTER: LOGOUT */}
       <div style={{ marginTop: '30px', marginBottom: '30px', textAlign: 'center' }}>

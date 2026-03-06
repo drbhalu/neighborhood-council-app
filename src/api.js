@@ -441,3 +441,16 @@ export const uploadProfilePicture = async (cnic, file) => {
   }
   return response.json();
 };
+
+export const submitComplaint = async (formData) => {
+  const response = await fetch(`${API_URL}/complaint`, {
+    method: 'POST',
+    body: formData
+  });
+  
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to submit complaint');
+  }
+  return response.json();
+};

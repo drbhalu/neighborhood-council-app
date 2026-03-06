@@ -125,7 +125,7 @@ const AllUsers = ({ onBack, onEditUser }) => {
                       </span>
                     </td>
                     <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}>
-                      {u.NHC_Code || "N/A"}
+                      {u.nhcCodes && u.nhcCodes.length ? u.nhcCodes.join(', ') : u.NHC_Code || "N/A"}
                     </td>
                     <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}>
                       <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>

@@ -7,10 +7,13 @@ import Splash from './components/Splash';
 import SendNotification from './components/SendNotification';
 import RequestsList from './components/RequestsList';
 import Elections from './components/Elections';
-import { getNHCList, createNHC, sendNotification } from './api';
+import { getNHCList, createNHC, sendNotification, sendRequest } from './api';
 import MemberDashboard from './components/MemberDashboard';
 import AllUsers from './components/AllUsers';
 import EditUser from './components/EditUser';
+import ChooseNHC from './components/ChooseNHC';
+import RequestNHC from './components/RequestNHC';
+
 
 function App() {
   const [currentView, setCurrentView] = useState('splash');
@@ -35,9 +38,26 @@ function App() {
     if (userData.role && userData.role.toLowerCase() === 'admin') {
       setCurrentView('admin');
     } else {
-      // Only set user state if they are a Member
-      setCurrentUser(userData);
-      setCurrentView('member');
+      // prepare nhc choices for members who belong to more than one council
+      let options = [];
+      if (userData.nhcCodes && Array.isArray(userData.nhcCodes)) {
+        options = [...userData.nhcCodes];
+      } else if (userData.nhcCode && typeof userData.nhcCode === 'string') {
+        options = userData.nhcCode
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+      }
+
+      const member = { ...userData, nhcOptions: options };
+      setCurrentUser(member);
+
+      // if user has multiple councils, prompt for selection first
+      if (options.length > 1) {
+        setCurrentView('choose-nhc');
+      } else {
+        setCurrentView('member');
+      }
     }
   };
 
@@ -145,10 +165,47 @@ function App() {
       )}
       
       {/* FIX: Added && currentUser check to prevent crash */}
+      {currentView === 'choose-nhc' && currentUser && (
+        <ChooseNHC
+          user={currentUser}
+          onSelect={(code) => {
+            setCurrentUser({ ...currentUser, nhcCode: code });
+            setCurrentView('member');
+          }}
+          onCancel={handleLogout}
+        />
+      )}
+
+      {currentView === 'request-nhc' && currentUser && (
+        <RequestNHC
+          user={currentUser}
+          onSubmit={async (location, address, reason) => {
+            try {
+              await sendRequest({
+                firstName: currentUser.firstName,
+                lastName: currentUser.lastName,
+                cnic: currentUser.cnic,
+                requestType: 'Create NHC',
+                message: `📍 Location: ${location}\n\n📮 Address: ${address}\n\n${reason}`,
+                location: location || ''
+              });
+              alert('Request sent to Admin!');
+              setCurrentView('member');
+            } catch (err) {
+              console.error(err);
+              alert('Failed to send request');
+            }
+          }}
+          onCancel={() => setCurrentView('member')}
+        />
+      )}
+
       {currentView === 'member' && currentUser && (
         <MemberDashboard 
           user={currentUser} 
           onLogout={handleLogout} 
+          onRequestNHCPage={() => setCurrentView('request-nhc')}
+          onBackToChooseNHC={() => setCurrentView('choose-nhc')}
         />
       )}
     </>

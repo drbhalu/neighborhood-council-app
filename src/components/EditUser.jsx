@@ -12,7 +12,7 @@ const EditUser = ({ user, onBack, onSave }) => {
     address: user.Address || '',
     email: user.Email || '',
     password: user.Password || '',
-    nhcCode: user.NHC_Code || ''
+    nhcCode: user.nhcCodes && user.nhcCodes.length ? user.nhcCodes[0] : ''
   });
 
   const [isSaving, setIsSaving] = useState(false);

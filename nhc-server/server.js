@@ -35,6 +35,33 @@ const upload = multer({
 // Serve profile pictures as static files
 app.use('/profile-pictures', express.static('profile-pictures'));
 
+// --- MULTER CONFIGURATION FOR COMPLAINT PHOTOS ---
+const complaintStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'complaint-photos/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
+    cb(null, uniqueName);
+  }
+});
+
+const complaintUpload = multer({ 
+  storage: complaintStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: function (req, file, cb) {
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
+    }
+  }
+});
+
+// Serve complaint photos as static files
+app.use('/complaint-photos', express.static('complaint-photos'));
+
 // --- CONFIGURATION ---
 const dbConfig = {
   user: 'sa',
@@ -107,10 +134,15 @@ async function initDB() {
     `);
     console.log("✓ Table Users ready.");
 
-    // Add NHC_Code column if missing
+    // Legacy support: column will be dropped after migration below.
+    // Only create the column if the mapping table doesn't yet exist – once we
+    // have UserNHCs we no longer need to add this field.
     await nhcPool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'NHC_Code' AND Object_ID = OBJECT_ID('Users'))
-      ALTER TABLE Users ADD NHC_Code NVARCHAR(100);
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='UserNHCs' AND xtype='U')
+      BEGIN
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'NHC_Code' AND Object_ID = OBJECT_ID('Users'))
+          ALTER TABLE Users ADD NHC_Code NVARCHAR(100);
+      END
     `);
 
     // Add ProfileImage column if missing
@@ -213,6 +245,53 @@ async function initDB() {
         ZoneData NVARCHAR(MAX)
       )
     `);
+
+    // --- NEW: mapping table for many-to-many user<->nhc relationships ---
+    await nhcPool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='UserNHCs' AND xtype='U')
+      CREATE TABLE UserNHCs (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        UserCNIC NVARCHAR(20),
+        NHC_Code NVARCHAR(100),
+        CONSTRAINT UQ_UserNHC UNIQUE (UserCNIC, NHC_Code)
+      )
+    `);
+    console.log("✓ Table UserNHCs ready.");
+
+    // migrate existing Users.NHC_Code values into mapping table (split comma-separated list)
+    try {
+      const users = await nhcPool.request().query('SELECT CNIC, NHC_Code FROM Users WHERE NHC_Code IS NOT NULL AND LTRIM(RTRIM(NHC_Code)) <> ""');
+      for (const u of users.recordset) {
+        const cnicVal = u.CNIC;
+        const codes = (u.NHC_Code || '')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+        for (const code of codes) {
+          try {
+            await nhcPool.request()
+              .input('UserCNIC', sql.NVarChar, cnicVal)
+              .input('NHC_Code', sql.NVarChar, code)
+              .query('INSERT INTO UserNHCs (UserCNIC, NHC_Code) VALUES (@UserCNIC, @NHC_Code)');
+          } catch (e) {
+            // ignore duplicate key errors
+          }
+        }
+      }
+      console.log(`✓ Migrated ${users.recordset.length} users to UserNHCs`);
+    } catch (migErr) {
+      console.error('Migration to UserNHCs failed:', migErr);
+    }
+    // once data copied, drop obsolete column
+    try {
+      await nhcPool.request().query(`
+        IF EXISTS (SELECT * FROM sys.columns WHERE Name = N'NHC_Code' AND Object_ID = OBJECT_ID('Users'))
+        ALTER TABLE Users DROP COLUMN NHC_Code;
+      `);
+      console.log('✓ Dropped Users.NHC_Code column');
+    } catch (dropErr) {
+      console.error('Failed to drop Users.NHC_Code column:', dropErr);
+    }
 
     // Drop NominationDate column if it exists
     await nhcPool.request().query(`
@@ -491,6 +570,24 @@ async function initDB() {
     `);
     console.log("✓ Table ElectionResults ready.");
 
+    // Create Complaints Table
+    await nhcPool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Complaints' AND xtype='U')
+      CREATE TABLE Complaints (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        UserCNIC NVARCHAR(20) NOT NULL,
+        UserName NVARCHAR(100),
+        NHC_Code NVARCHAR(100),
+        Category NVARCHAR(100),
+        Description NVARCHAR(MAX),
+        HasBudget BIT DEFAULT 0,
+        PhotoPath NVARCHAR(MAX),
+        Status NVARCHAR(50) DEFAULT 'Pending',
+        CreatedDate DATETIME DEFAULT GETDATE()
+      )
+    `);
+    console.log("✓ Table Complaints ready.");
+
     console.log("✓ All tables initialized successfully.");
     await nhcPool.close();
 
@@ -589,10 +686,10 @@ app.put('/api/nhc/nomination', async (req, res) => {
     const id = result.recordset[0].id;
     console.log("✓ Inserted new nomination record with ID:", id);
     
-    // Send notifications to all members of this NHC
+    // Send notifications to all members of this NHC (lookup via mapping table)
     const membersResult = await pool.request()
       .input('NHC_Code', sql.NVarChar, nhcName)
-      .query('SELECT CNIC FROM Users WHERE NHC_Code = @NHC_Code');
+      .query("SELECT u.CNIC FROM Users u JOIN UserNHCs m ON u.CNIC = m.UserCNIC WHERE m.NHC_Code = @NHC_Code");
     
     console.log(`📢 Found ${membersResult.recordset.length} members in NHC: ${nhcName}`);
     
@@ -691,10 +788,10 @@ app.put('/api/nhc/election', async (req, res) => {
     const id = result.recordset[0].id;
     console.log("✓ Inserted new election record with ID:", id);
     
-    // Send notifications to all members of this NHC
+    // Send notifications to all members of this NHC (lookup via mapping table)
     const membersResult = await pool.request()
       .input('NHC_Code', sql.NVarChar, nhcName)
-      .query('SELECT CNIC FROM Users WHERE NHC_Code = @NHC_Code');
+      .query("SELECT u.CNIC FROM Users u JOIN UserNHCs m ON u.CNIC = m.UserCNIC WHERE m.NHC_Code = @NHC_Code");
     
     console.log(`📢 Found ${membersResult.recordset.length} members in NHC: ${nhcName}`);
     
@@ -806,7 +903,7 @@ app.delete('/api/nhc/election/:nhcId', async (req, res) => {
           await pool.request()
             .input('NHC_Code', sql.NVarChar, nhcName)
             .input('RoleName', sql.NVarChar, p.Name)
-            .query("UPDATE Users SET Role = 'User' WHERE NHC_Code = @NHC_Code AND Role = @RoleName");
+            .query("UPDATE Users SET Role = 'User' WHERE CNIC IN (SELECT UserCNIC FROM UserNHCs WHERE NHC_Code = @NHC_Code) AND Role = @RoleName");
         } catch (e) {
           console.error('Failed to reset role for position', p.Name, e);
         }
@@ -1066,10 +1163,25 @@ app.post('/api/signup', async (req, res) => {
       .input('Location', sql.NVarChar(sql.MAX), location)
       .input('Email', sql.NVarChar, email)
       .input('Password', sql.NVarChar, password)
-      .input('NHC_Code', sql.NVarChar, nhcCode)
       .input('ProfileImage', sql.NVarChar(sql.MAX), profileImage)
-      .query("INSERT INTO Users (FirstName, LastName, Gender, CNIC, Phone, Address, Location, Email, Password, NHC_Code, ProfileImage) VALUES (@FirstName, @LastName, @Gender, @CNIC, @Phone, @Address, @Location, @Email, @Password, @NHC_Code, @ProfileImage); SELECT SCOPE_IDENTITY() as id");
+      .query("INSERT INTO Users (FirstName, LastName, Gender, CNIC, Phone, Address, Location, Email, Password, ProfileImage) VALUES (@FirstName, @LastName, @Gender, @CNIC, @Phone, @Address, @Location, @Email, @Password, @ProfileImage); SELECT SCOPE_IDENTITY() as id");
     const id = result.recordset[0].id;
+
+    // add mapping record if NHC was detected during signup
+    if (nhcCode) {
+      const codes = nhcCode.split(',').map(s => s.trim()).filter(Boolean);
+      for (const code of codes) {
+        try {
+          await pool.request()
+            .input('UserCNIC', sql.NVarChar, cnic)
+            .input('NHC_Code', sql.NVarChar, code)
+            .query('INSERT INTO UserNHCs (UserCNIC, NHC_Code) VALUES (@UserCNIC, @NHC_Code)');
+        } catch(e) {
+          // ignore duplicates
+        }
+      }
+    }
+
     res.status(201).json({ message: "User Registered", id: id });
   } catch (err) {
     console.error("❌ Signup Error:", err);
@@ -1095,24 +1207,40 @@ app.post('/api/login', async (req, res) => {
     if (result.recordset.length > 0) {
       const user = result.recordset[0];
       
-      // Get NHC_Id from NHC_Code if user has an NHC assigned
+      // fetch multiple codes from mapping table first
+      let codes = [];
+      try {
+        const cRes = await pool.request()
+          .input('CNIC', sql.NVarChar, user.CNIC)
+          .query('SELECT NHC_Code FROM UserNHCs WHERE UserCNIC = @CNIC');
+        codes = cRes.recordset.map(r => r.NHC_Code);
+      } catch(e) {
+        console.error('Error fetching codes for', user.CNIC, e);
+      }
+
+      // Get NHC_Id from first mapped code if any
       let nhcId = null;
-      if (user.NHC_Code) {
-        const nhcResult = await pool.request()
-          .input('Name', sql.NVarChar, user.NHC_Code)
-          .query("SELECT Id FROM NHC_Zones WHERE Name = @Name");
-        if (nhcResult.recordset.length > 0) {
-          nhcId = nhcResult.recordset[0].Id;
+      if (codes && codes.length > 0) {
+        try {
+          const nhcResult = await pool.request()
+            .input('Name', sql.NVarChar, codes[0])
+            .query("SELECT Id FROM NHC_Zones WHERE Name = @Name");
+          if (nhcResult.recordset.length > 0) {
+            nhcId = nhcResult.recordset[0].Id;
+          }
+        } catch(e) {
+          console.error('lookup nhcId failed:', e);
         }
       }
-      
+
       res.status(200).json({ 
         message: "Login Successful", 
         role: user.Role,
         firstName: user.FirstName,
         lastName: user.LastName,
         cnic: user.CNIC,
-        nhcCode: user.NHC_Code,
+        nhcCode: codes.length > 0 ? codes[0] : null,
+        nhcCodes: codes,
         nhcId: nhcId,
         address: user.Address,
         profileImage: ensureFullProfileImageUrl(user.ProfileImage)
@@ -1134,6 +1262,7 @@ app.put('/api/user', async (req, res) => {
   let pool;
   try {
     pool = await sql.connect(dbConfig);
+    // basic profile fields
     await pool.request()
       .input('CNIC', sql.NVarChar, cnic)
       .input('FirstName', sql.NVarChar, firstName)
@@ -1141,8 +1270,23 @@ app.put('/api/user', async (req, res) => {
       .input('Email', sql.NVarChar, email)
       .input('Phone', sql.NVarChar, phone)
       .input('Address', sql.NVarChar, address)
-      .input('NHC_Code', sql.NVarChar, nhcCode)
-      .query("UPDATE Users SET FirstName = @FirstName, LastName = @LastName, Email = @Email, Phone = @Phone, Address = @Address, NHC_Code = @NHC_Code WHERE CNIC = @CNIC");
+      .query("UPDATE Users SET FirstName = @FirstName, LastName = @LastName, Email = @Email, Phone = @Phone, Address = @Address WHERE CNIC = @CNIC");
+
+    // if an NHC code was submitted, save mapping
+    if (nhcCode) {
+      const codes = nhcCode.split(',').map(s => s.trim()).filter(Boolean);
+      for (const code of codes) {
+        try {
+          await pool.request()
+            .input('UserCNIC', sql.NVarChar, cnic)
+            .input('NHC_Code', sql.NVarChar, code)
+            .query('INSERT INTO UserNHCs (UserCNIC, NHC_Code) VALUES (@UserCNIC, @NHC_Code)');
+        } catch(e) {
+          // ignore duplicate entries
+        }
+      }
+    }
+
     res.status(200).json({ message: "Profile Updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1156,7 +1300,17 @@ app.get('/api/users', async (req, res) => {
   let pool;
   try {
     pool = await sql.connect(dbConfig);
-    let result = await pool.request().query("SELECT Id, FirstName, LastName, CNIC, Email, Role, NHC_Code, CreatedDate FROM Users ORDER BY CreatedDate DESC");
+    let result = await pool.request().query(
+      `SELECT u.Id, u.FirstName, u.LastName, u.CNIC, u.Email, u.Role,
+              -- aggregate codes from mapping table
+              STUFF((SELECT ', ' + m.NHC_Code
+                     FROM UserNHCs m
+                     WHERE m.UserCNIC = u.CNIC
+                     FOR XML PATH('')),1,2,'') AS NHC_Code,
+              u.CreatedDate
+       FROM Users u
+       ORDER BY u.CreatedDate DESC`
+    );
     res.json(result.recordset);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1244,6 +1398,17 @@ app.get('/api/user', async (req, res) => {
     if (result.recordset.length > 0) {
       const user = result.recordset[0];
       user.ProfileImage = ensureFullProfileImageUrl(user.ProfileImage);
+      // fetch nhcCodes mapping
+      try {
+        const cRes = await pool.request()
+          .input('CNIC', sql.NVarChar, user.CNIC)
+          .query('SELECT NHC_Code FROM UserNHCs WHERE UserCNIC = @CNIC');
+        const codes = cRes.recordset.map(r => r.NHC_Code);
+        user.nhcCodes = codes;
+        user.nhcCode = codes.length > 0 ? codes[0] : null;
+      } catch (e) {
+        console.error('Error fetching codes for user', user.CNIC, e);
+      }
       res.json(user);
     }
     else res.status(404).json({ error: 'User not found' });
@@ -1260,6 +1425,82 @@ app.get('/api/requests', async (req, res) => {
   try {
     pool = await sql.connect(dbConfig);
     const result = await pool.request().query("SELECT * FROM Requests ORDER BY CreatedDate DESC");
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
+// POST: Submit Complaint
+app.post('/api/complaint', complaintUpload.single('photo'), async (req, res) => {
+  let pool;
+  try {
+    const { userCnic, userName, nhcCode, category, description, hasBudget } = req.body;
+
+    // Validate required fields
+    if (!userCnic || !category || !description) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Get photo path if uploaded
+    const photoPath = req.file ? `/complaint-photos/${req.file.filename}` : null;
+
+    pool = await sql.connect(dbConfig);
+    
+    // Insert complaint into database
+    const result = await pool.request()
+      .input('UserCNIC', sql.NVarChar, userCnic)
+      .input('UserName', sql.NVarChar, userName || '')
+      .input('NHC_Code', sql.NVarChar, nhcCode || '')
+      .input('Category', sql.NVarChar, category)
+      .input('Description', sql.NVarChar(sql.MAX), description)
+      .input('HasBudget', sql.Bit, hasBudget === '1' ? 1 : 0)
+      .input('PhotoPath', sql.NVarChar(sql.MAX), photoPath)
+      .query(`
+        INSERT INTO Complaints (UserCNIC, UserName, NHC_Code, Category, Description, HasBudget, PhotoPath, Status)
+        VALUES (@UserCNIC, @UserName, @NHC_Code, @Category, @Description, @HasBudget, @PhotoPath, 'Pending');
+        SELECT SCOPE_IDENTITY() as id;
+      `);
+
+    const complaintId = result.recordset[0].id;
+    res.status(201).json({ 
+      message: 'Complaint submitted successfully', 
+      complaintId: complaintId,
+      photoPath: photoPath
+    });
+  } catch (err) {
+    console.error('Error submitting complaint:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
+// GET: All Complaints (for admin)
+app.get('/api/complaints', async (req, res) => {
+  let pool;
+  try {
+    pool = await sql.connect(dbConfig);
+    const result = await pool.request().query('SELECT * FROM Complaints ORDER BY CreatedDate DESC');
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
+// GET: User's Complaints
+app.get('/api/complaints/:userCnic', async (req, res) => {
+  let pool;
+  try {
+    const { userCnic } = req.params;
+    pool = await sql.connect(dbConfig);
+    const result = await pool.request()
+      .input('UserCNIC', sql.NVarChar, userCnic)
+      .query('SELECT * FROM Complaints WHERE UserCNIC = @UserCNIC ORDER BY CreatedDate DESC');
     res.json(result.recordset);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1308,13 +1549,16 @@ app.put('/api/request/assign', async (req, res) => {
     const reqRecord = r.recordset[0];
     const cnic = reqRecord.CNIC;
 
-    // Update user's NHC_Code
+    // add association row in UserNHCs if not already present
+    try {
+      await pool.request()
+        .input('UserCNIC', sql.NVarChar, cnic)
+        .input('NHC_Code', sql.NVarChar, nhcCode)
+        .query('INSERT INTO UserNHCs (UserCNIC, NHC_Code) VALUES (@UserCNIC, @NHC_Code)');
+    } catch (e) {
+      // duplicate key means mapping already exists, ignore
+    }
 
-    // Update user's NHC_Code
-    await pool.request()
-      .input('CNIC', sql.NVarChar, cnic)
-      .input('NHC_Code', sql.NVarChar, nhcCode)
-      .query('UPDATE Users SET NHC_Code = @NHC_Code WHERE CNIC = @CNIC');
 
     // Update request status and assigned nhc
     await pool.request()
