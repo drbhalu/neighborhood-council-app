@@ -1,38 +1,47 @@
-import React, { useState } from 'react';
-import { submitComplaint } from '../api';
+import React, { useEffect, useState } from 'react';
+import { getNHCMembersByCode, submitComplaint } from '../api';
 
 const FileComplaint = ({ user, onClose, onSuccess }) => {
   const [category, setCategory] = useState('');
+  const [complaintType, setComplaintType] = useState('normal');
+  const [againstMemberCnic, setAgainstMemberCnic] = useState('');
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
   const [description, setDescription] = useState('');
-  const [hasBudget, setHasBudget] = useState('');
-  const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [photoPreviews, setPhotoPreviews] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const complaintCategories = [
-    'Water Supply',
-    'Sewage/Drainage',
-    'Street Lighting',
-    'Road Condition',
-    'Garbage Collection',
-    'Park Maintenance',
-    'Security Issue',
-    'Noise Pollution',
-    'Construction/Demolition',
-    'Other'
-  ];
+  useEffect(() => {
+    const loadMembers = async () => {
+      if (complaintType !== 'against' || !user?.nhcCode) return;
+      setMembersLoading(true);
+      try {
+        const data = await getNHCMembersByCode(user.nhcCode);
+        const filtered = (data || []).filter((m) => String(m.CNIC) !== String(user.cnic));
+        setMembers(filtered);
+      } catch (err) {
+        setError(err.message || 'Failed to load NHC members');
+      } finally {
+        setMembersLoading(false);
+      }
+    };
+    loadMembers();
+  }, [complaintType, user?.nhcCode, user?.cnic]);
 
   const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setPhoto(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const selectedFiles = files.slice(0, 5);
+    setPhotos(selectedFiles);
+    setPhotoPreviews(selectedFiles.map((file) => URL.createObjectURL(file)));
+  };
+
+  const removePhoto = (index) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    setPhotoPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -40,22 +49,24 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
     setError('');
 
     // Validation
-    if (!category) {
-      setError('Please select a complaint category');
+    if (!category.trim()) {
+      setError('Please enter a complaint title');
       return;
     }
     if (!description.trim()) {
       setError('Please describe your complaint');
       return;
     }
-    if (hasBudget === '') {
-      setError('Please specify if the complaint involves budget');
+    if (complaintType === 'against' && !againstMemberCnic) {
+      setError('Please select the member this complaint is against');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      const againstMember = members.find((m) => String(m.CNIC) === String(againstMemberCnic));
+
       // Prepare form data
       const formData = new FormData();
       formData.append('userCnic', user.cnic);
@@ -63,10 +74,15 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
       formData.append('nhcCode', user.nhcCode);
       formData.append('category', category);
       formData.append('description', description);
-      formData.append('hasBudget', hasBudget === 'yes' ? 1 : 0);
-      if (photo) {
-        formData.append('photo', photo);
+      formData.append('hasBudget', 0);
+      formData.append('complaintType', complaintType);
+      if (complaintType === 'against') {
+        formData.append('againstMemberCnic', againstMemberCnic);
+        formData.append('againstMemberName', againstMember ? `${againstMember.FirstName || ''} ${againstMember.LastName || ''}`.trim() : '');
       }
+      photos.forEach((file) => {
+        formData.append('photos', file);
+      });
 
       await submitComplaint(formData);
       alert('Complaint submitted successfully!');
@@ -170,11 +186,14 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
               fontWeight: '600',
               color: '#1f2937'
             }}>
-              Select Complaint Category *
+              Complaint Type *
             </label>
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={complaintType}
+              onChange={(e) => {
+                setComplaintType(e.target.value);
+                setAgainstMemberCnic('');
+              }}
               style={{
                 width: '100%',
                 padding: '12px',
@@ -187,49 +206,75 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
                 boxSizing: 'border-box'
               }}
             >
-              <option value="">-- Choose Category --</option>
-              {complaintCategories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
+              <option value="normal">Normal</option>
+              <option value="against">Against Member</option>
             </select>
           </div>
 
-          {/* BUDGET RADIO BUTTONS */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{
               display: 'block',
-              marginBottom: '12px',
+              marginBottom: '8px',
               fontSize: '14px',
               fontWeight: '600',
               color: '#1f2937'
             }}>
-              Does this complaint involve Budget? *
+              Complaint Title *
             </label>
-            <div style={{ display: 'flex', gap: '24px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="budget"
-                  value="yes"
-                  checked={hasBudget === 'yes'}
-                  onChange={(e) => setHasBudget(e.target.value)}
-                  style={{ marginRight: '8px', cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '14px', color: '#374151' }}>Yes</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="budget"
-                  value="no"
-                  checked={hasBudget === 'no'}
-                  onChange={(e) => setHasBudget(e.target.value)}
-                  style={{ marginRight: '8px', cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '14px', color: '#374151' }}>No</span>
-              </label>
-            </div>
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="Enter complaint title"
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                backgroundColor: 'white',
+                boxSizing: 'border-box'
+              }}
+            />
           </div>
+
+          {complaintType === 'against' && (
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#1f2937'
+              }}>
+                Select Member You Are Complaining Against *
+              </label>
+              <select
+                value={againstMemberCnic}
+                onChange={(e) => setAgainstMemberCnic(e.target.value)}
+                disabled={membersLoading}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  backgroundColor: 'white',
+                  cursor: 'pointer',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="">-- Choose Member --</option>
+                {members.map((member) => (
+                  <option key={member.CNIC} value={member.CNIC}>
+                    {member.FirstName} {member.LastName} ({member.CNIC})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* DESCRIPTION TEXTAREA */}
           <div style={{ marginBottom: '20px' }}>
@@ -273,6 +318,7 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
             </label>
             <input
               type="file"
+              multiple
               accept="image/jpeg,image/png,image/gif,image/webp"
               onChange={handlePhotoChange}
               style={{
@@ -285,44 +331,48 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
               }}
             />
             <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>
-              Supported: JPG, PNG, GIF, WebP (Max 5MB)
+              Supported: JPG, PNG, GIF, WebP (Max 5MB each, up to 5 photos)
             </p>
 
             {/* PHOTO PREVIEW */}
-            {photoPreview && (
+            {photoPreviews.length > 0 && (
               <div style={{
                 marginTop: '12px',
-                textAlign: 'center'
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '10px'
               }}>
-                <img
-                  src={photoPreview}
-                  alt="Preview"
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '200px',
-                    borderRadius: '8px',
-                    border: '2px solid #d1d5db'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPhoto(null);
-                    setPhotoPreview(null);
-                  }}
-                  style={{
-                    marginTop: '8px',
-                    padding: '6px 12px',
-                    backgroundColor: '#ef4444',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Remove Photo
-                </button>
+                {photoPreviews.map((preview, index) => (
+                  <div key={index} style={{ textAlign: 'center' }}>
+                    <img
+                      src={preview}
+                      alt={`Preview ${index + 1}`}
+                      style={{
+                        width: '100%',
+                        maxHeight: '140px',
+                        objectFit: 'cover',
+                        borderRadius: '8px',
+                        border: '2px solid #d1d5db'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(index)}
+                      style={{
+                        marginTop: '8px',
+                        padding: '6px 12px',
+                        backgroundColor: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>

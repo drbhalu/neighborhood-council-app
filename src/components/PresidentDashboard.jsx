@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getComplaintsByNHC } from '../api';
+import AllSuggestions from './AllSuggestions'; // NEW: Import AllSuggestions
 import logo from '../assets/logo.png';
 
 const PresidentDashboard = ({ user, onClose }) => {
@@ -7,6 +8,30 @@ const PresidentDashboard = ({ user, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null); // null = overview, 'total', 'open', 'in-progress', 'resolved'
+  const [showSuggestions, setShowSuggestions] = useState(false); // NEW: State for showing suggestions
+
+  const normalizeStatus = (status) => {
+    const normalized = (status || 'Pending').toLowerCase().replace(/\s+/g, '-');
+    if (normalized === 'open') return 'pending';
+    if (normalized === 'inprogress') return 'in-progress';
+    return normalized;
+  };
+
+  const getStatusStyle = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'resolved') return '#10b981';
+    if (normalized === 'in-progress') return '#f59e0b';
+    if (normalized === 'pending') return '#ef4444';
+    return '#6b7280';
+  };
+
+  const getStatusLabel = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'in-progress') return 'In-Progress';
+    if (normalized === 'resolved') return 'Resolved';
+    if (normalized === 'pending') return 'Pending';
+    return status || 'Pending';
+  };
 
   useEffect(() => {
     const fetchComplaints = async () => {
@@ -26,21 +51,21 @@ const PresidentDashboard = ({ user, onClose }) => {
 
   // Calculate statistics
   const totalComplaints = complaints.length;
-  const openComplaints = complaints.filter(c => c.Status === 'Pending' || c.Status === 'Open').length;
-  const inProgressComplaints = complaints.filter(c => c.Status === 'In-Progress').length;
-  const resolvedComplaints = complaints.filter(c => c.Status === 'Resolved').length;
+  const pendingComplaints = complaints.filter(c => normalizeStatus(c.Status) === 'pending').length;
+  const inProgressComplaints = complaints.filter(c => normalizeStatus(c.Status) === 'in-progress').length;
+  const resolvedComplaints = complaints.filter(c => normalizeStatus(c.Status) === 'resolved').length;
 
   // Filter complaints based on selected category
   const getFilteredComplaints = () => {
     switch (selectedCategory) {
       case 'total':
         return complaints;
-      case 'open':
-        return complaints.filter(c => c.Status === 'Pending' || c.Status === 'Open');
+      case 'pending':
+        return complaints.filter(c => normalizeStatus(c.Status) === 'pending');
       case 'in-progress':
-        return complaints.filter(c => c.Status === 'In-Progress');
+        return complaints.filter(c => normalizeStatus(c.Status) === 'in-progress');
       case 'resolved':
-        return complaints.filter(c => c.Status === 'Resolved');
+        return complaints.filter(c => normalizeStatus(c.Status) === 'resolved');
       default:
         return [];
     }
@@ -51,8 +76,8 @@ const PresidentDashboard = ({ user, onClose }) => {
     switch (selectedCategory) {
       case 'total':
         return 'All Complaints';
-      case 'open':
-        return 'Open Complaints';
+      case 'pending':
+        return 'Pending Complaints';
       case 'in-progress':
         return 'In-Progress Complaints';
       case 'resolved':
@@ -70,6 +95,192 @@ const PresidentDashboard = ({ user, onClose }) => {
   // Handle back to overview
   const handleBackToOverview = () => {
     setSelectedCategory(null);
+  };
+
+  const renderComplaintList = (items, emptyMessage) => {
+    if (items.length === 0) {
+      return (
+        <div style={{
+          textAlign: 'center',
+          padding: '40px 20px',
+          color: '#666',
+          backgroundColor: '#f9fafb',
+          borderRadius: '8px'
+        }}>
+          <p>{emptyMessage}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {items.map((complaint) => (
+          <div
+            key={complaint.Id}
+            style={{
+              backgroundColor: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: '12px',
+              padding: '20px',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '12px'
+            }}>
+              <div>
+                <h3 style={{
+                  margin: '0 0 4px 0',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  color: '#1f2937'
+                }}>
+                  {complaint.Category}
+                </h3>
+                <p style={{
+                  margin: 0,
+                  fontSize: '14px',
+                  color: '#6b7280'
+                }}>
+                  Submitted by: {complaint.UserName} (CNIC: {complaint.UserCNIC})
+                </p>
+              </div>
+              <div style={{
+                backgroundColor: getStatusStyle(complaint.Status),
+                color: 'white',
+                padding: '4px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: 'bold'
+              }}>
+                {getStatusLabel(complaint.Status)}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <p style={{
+                margin: '0 0 8px 0',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                color: '#374151'
+              }}>
+                Description:
+              </p>
+              <p style={{
+                margin: 0,
+                fontSize: '14px',
+                color: '#4b5563',
+                lineHeight: '1.5'
+              }}>
+                {complaint.Description}
+              </p>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '12px',
+              marginBottom: '12px'
+            }}>
+              <div>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#6b7280',
+                  textTransform: 'uppercase'
+                }}>
+                  Complaint Type:
+                </span>
+                <span style={{
+                  marginLeft: '8px',
+                  fontSize: '14px',
+                  color: '#374151',
+                  fontWeight: 'bold'
+                }}>
+                  {complaint.ComplaintType === 'against' ? 'Against Member' : 'Normal'}
+                </span>
+              </div>
+              <div>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#6b7280',
+                  textTransform: 'uppercase'
+                }}>
+                  Date Submitted:
+                </span>
+                <span style={{
+                  marginLeft: '8px',
+                  fontSize: '14px',
+                  color: '#374151'
+                }}>
+                  {new Date(complaint.CreatedDate).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+
+            {complaint.ComplaintType === 'against' && complaint.AgainstMemberCNIC && (
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#6b7280',
+                  textTransform: 'uppercase'
+                }}>
+                  Against Member:
+                </span>
+                <span style={{ marginLeft: '8px', fontSize: '14px', color: '#374151' }}>
+                  {(complaint.AgainstMemberName || 'N/A')} (CNIC: {complaint.AgainstMemberCNIC})
+                </span>
+              </div>
+            )}
+
+            {(complaint.PhotoPaths || complaint.PhotoPath) && (
+              <div style={{ marginTop: '12px' }}>
+                <p style={{
+                  margin: '0 0 8px 0',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  color: '#374151'
+                }}>
+                  📸 Photo Attachment(s):
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+                  {(() => {
+                    let paths = [];
+                    try {
+                      paths = complaint.PhotoPaths ? JSON.parse(complaint.PhotoPaths) : [];
+                    } catch (_) {
+                      paths = [];
+                    }
+                    if ((!paths || paths.length === 0) && complaint.PhotoPath) {
+                      paths = [complaint.PhotoPath];
+                    }
+                    return (paths || []).map((pathItem, idx) => (
+                      <img
+                        key={`${complaint.Id}-photo-${idx}`}
+                        src={`http://localhost:3001${pathItem}`}
+                        alt={`Complaint photo ${idx + 1}`}
+                        style={{
+                          width: '100%',
+                          maxHeight: '180px',
+                          objectFit: 'cover',
+                          borderRadius: '8px',
+                          border: '1px solid #d1d5db'
+                        }}
+                      />
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -122,6 +333,60 @@ const PresidentDashboard = ({ user, onClose }) => {
           >
             ✕
           </button>
+        </div>
+
+        {/* TOP ACTION BUTTONS */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
+          {!selectedCategory ? (
+            <>
+              <button
+                onClick={() => handleCardClick('total')}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Complaints
+              </button>
+              <button
+                onClick={() => setShowSuggestions(true)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#7c3aed',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Suggestions
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => handleCardClick('total')}
+              style={{
+                padding: '10px 20px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: '#1d4ed8',
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              Show All Complaints
+            </button>
+          )}
         </div>
 
         {/* BACK BUTTON (only show when viewing details) */}
@@ -198,170 +463,100 @@ const PresidentDashboard = ({ user, onClose }) => {
           </div>
         )}
 
-        {/* STATISTICS CARDS */}
-        {!loading && (
+        {/* STATISTICS CARDS - COMMENTED OUT */}
+        {/* {!loading && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: '20px',
+            gap: '12px',
             marginBottom: '30px'
           }}>
-            {/* TOTAL COMPLAINTS */}
+            TOTAL COMPLAINTS
             <div
               style={{
                 backgroundColor: '#0ea5e9',
-                borderRadius: '16px',
-                padding: '24px',
+                borderRadius: '8px',
+                padding: '16px',
                 textAlign: 'center',
-                boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)',
-                position: 'relative',
-                overflow: 'hidden',
                 cursor: 'pointer',
-                transition: 'transform 0.2s ease'
+                transition: 'opacity 0.2s ease'
               }}
               onClick={() => handleCardClick('total')}
-              onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'}
-              onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+              onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.target.style.opacity = '1'}
             >
-              <div style={{
-                position: 'absolute',
-                top: '-50%',
-                right: '-20%',
-                width: '200px',
-                height: '200px',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%'
-              }}></div>
               <p style={{
-                margin: '0 0 15px 0',
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.9)',
+                margin: '0 0 8px 0',
+                fontSize: '12px',
+                color: 'white',
                 fontWeight: '500'
               }}>
-                Total complaints
-              </p>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px'
-              }}>
-                <span style={{
-                  fontSize: '48px',
-                  fontWeight: 'bold',
-                  color: 'white'
-                }}>
-                  {totalComplaints}
-                </span>
-                <span style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                  color: 'white',
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                }}>
-                  All
-                </span>
-              </div>
-            </div>
-
-            {/* OPEN/ATTENTION COMPLAINTS */}
-            <div
-              style={{
-                backgroundColor: '#0ea5e9',
-                borderRadius: '16px',
-                padding: '24px',
-                textAlign: 'center',
-                boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)',
-                position: 'relative',
-                overflow: 'hidden',
-                cursor: 'pointer',
-                transition: 'transform 0.2s ease'
-              }}
-              onClick={() => handleCardClick('open')}
-              onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'}
-              onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-            >
-              <div style={{
-                position: 'absolute',
-                top: '-50%',
-                right: '-20%',
-                width: '200px',
-                height: '200px',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%'
-              }}></div>
-              <p style={{
-                margin: '0 0 15px 0',
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.9)',
-                fontWeight: '500'
-              }}>
-                Open
-              </p>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px'
-              }}>
-                <span style={{
-                  fontSize: '48px',
-                  fontWeight: 'bold',
-                  color: 'white'
-                }}>
-                  {openComplaints}
-                </span>
-                <span style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                  color: 'white',
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                }}>
-                  Attention
-                </span>
-              </div>
-            </div>
-
-            {/* IN-PROGRESS COMPLAINTS */}
-            <div
-              style={{
-                backgroundColor: '#0ea5e9',
-                borderRadius: '16px',
-                padding: '24px',
-                textAlign: 'center',
-                boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)',
-                position: 'relative',
-                overflow: 'hidden',
-                cursor: 'pointer',
-                transition: 'transform 0.2s ease'
-              }}
-              onClick={() => handleCardClick('in-progress')}
-              onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'}
-              onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-            >
-              <div style={{
-                position: 'absolute',
-                top: '-50%',
-                right: '-20%',
-                width: '200px',
-                height: '200px',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%'
-              }}></div>
-              <p style={{
-                margin: '0 0 15px 0',
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.9)',
-                fontWeight: '500'
-              }}>
-                In-Progress
+                Total
               </p>
               <span style={{
-                fontSize: '48px',
+                fontSize: '32px',
+                fontWeight: 'bold',
+                color: 'white'
+              }}>
+                {totalComplaints}
+              </span>
+            </div>
+
+            PENDING COMPLAINTS
+            <div
+              style={{
+                backgroundColor: '#0ea5e9',
+                borderRadius: '8px',
+                padding: '16px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'opacity 0.2s ease'
+              }}
+              onClick={() => handleCardClick('pending')}
+              onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.target.style.opacity = '1'}
+            >
+              <p style={{
+                margin: '0 0 8px 0',
+                fontSize: '12px',
+                color: 'white',
+                fontWeight: '500'
+              }}>
+                Pending
+              </p>
+              <span style={{
+                fontSize: '32px',
+                fontWeight: 'bold',
+                color: 'white'
+              }}>
+                {pendingComplaints}
+              </span>
+            </div>
+
+            IN-PROGRESS COMPLAINTS
+            <div
+              style={{
+                backgroundColor: '#0ea5e9',
+                borderRadius: '8px',
+                padding: '16px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'opacity 0.2s ease'
+              }}
+              onClick={() => handleCardClick('in-progress')}
+              onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.target.style.opacity = '1'}
+            >
+              <p style={{
+                margin: '0 0 8px 0',
+                fontSize: '12px',
+                color: 'white',
+                fontWeight: '500'
+              }}>
+                In Progress
+              </p>
+              <span style={{
+                fontSize: '32px',
                 fontWeight: 'bold',
                 color: 'white'
               }}>
@@ -369,223 +564,51 @@ const PresidentDashboard = ({ user, onClose }) => {
               </span>
             </div>
 
-            {/* RESOLVED COMPLAINTS */}
+            RESOLVED COMPLAINTS
             <div
               style={{
                 backgroundColor: '#0ea5e9',
-                borderRadius: '16px',
-                padding: '24px',
+                borderRadius: '8px',
+                padding: '16px',
                 textAlign: 'center',
-                boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)',
-                position: 'relative',
-                overflow: 'hidden',
                 cursor: 'pointer',
-                transition: 'transform 0.2s ease'
+                transition: 'opacity 0.2s ease'
               }}
               onClick={() => handleCardClick('resolved')}
-              onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'}
-              onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+              onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.target.style.opacity = '1'}
             >
-              <div style={{
-                position: 'absolute',
-                top: '-50%',
-                right: '-20%',
-                width: '200px',
-                height: '200px',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%'
-              }}></div>
               <p style={{
-                margin: '0 0 15px 0',
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.9)',
+                margin: '0 0 8px 0',
+                fontSize: '12px',
+                color: 'white',
                 fontWeight: '500'
               }}>
                 Resolved
               </p>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px'
+              <span style={{
+                fontSize: '32px',
+                fontWeight: 'bold',
+                color: 'white'
               }}>
-                <span style={{
-                  fontSize: '48px',
-                  fontWeight: 'bold',
-                  color: 'white'
-                }}>
-                  {resolvedComplaints}
-                </span>
-                <span style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                  color: 'white',
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                }}>
-                  Resolved
-                </span>
-              </div>
+                {resolvedComplaints}
+              </span>
             </div>
+          </div>
+        )} */}
+
+        {/* ALL COMPLAINTS IN DASHBOARD OVERVIEW */}
+        {!loading && !selectedCategory && (
+          <div>
+            <h3 style={{ margin: '0 0 12px 0', color: '#1f2937' }}>All Complaints</h3>
+            {renderComplaintList(complaints, 'No complaints found in this NHC.')}
           </div>
         )}
 
         {/* COMPLAINT DETAILS VIEW */}
         {!loading && selectedCategory && (
           <div>
-            {getFilteredComplaints().length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '40px 20px',
-                color: '#666',
-                backgroundColor: '#f9fafb',
-                borderRadius: '8px'
-              }}>
-                <p>No complaints found in this category.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {getFilteredComplaints().map((complaint) => (
-                  <div
-                    key={complaint.Id}
-                    style={{
-                      backgroundColor: '#f9fafb',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '12px',
-                      padding: '20px',
-                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-                    }}
-                  >
-                    {/* COMPLAINT HEADER */}
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      marginBottom: '12px'
-                    }}>
-                      <div>
-                        <h3 style={{
-                          margin: '0 0 4px 0',
-                          fontSize: '18px',
-                          fontWeight: 'bold',
-                          color: '#1f2937'
-                        }}>
-                          {complaint.Category}
-                        </h3>
-                        <p style={{
-                          margin: 0,
-                          fontSize: '14px',
-                          color: '#6b7280'
-                        }}>
-                          Submitted by: {complaint.UserName} (CNIC: {complaint.UserCNIC})
-                        </p>
-                      </div>
-                      <div style={{
-                        backgroundColor: complaint.Status === 'Resolved' ? '#10b981' :
-                                       complaint.Status === 'In-Progress' ? '#f59e0b' :
-                                       complaint.Status === 'Pending' ? '#ef4444' : '#6b7280',
-                        color: 'white',
-                        padding: '4px 12px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 'bold'
-                      }}>
-                        {complaint.Status || 'Pending'}
-                      </div>
-                    </div>
-
-                    {/* COMPLAINT DESCRIPTION */}
-                    <div style={{ marginBottom: '12px' }}>
-                      <p style={{
-                        margin: '0 0 8px 0',
-                        fontSize: '14px',
-                        fontWeight: 'bold',
-                        color: '#374151'
-                      }}>
-                        Description:
-                      </p>
-                      <p style={{
-                        margin: 0,
-                        fontSize: '14px',
-                        color: '#4b5563',
-                        lineHeight: '1.5'
-                      }}>
-                        {complaint.Description}
-                      </p>
-                    </div>
-
-                    {/* COMPLAINT DETAILS */}
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: '12px',
-                      marginBottom: '12px'
-                    }}>
-                      <div>
-                        <span style={{
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          color: '#6b7280',
-                          textTransform: 'uppercase'
-                        }}>
-                          Budget Involved:
-                        </span>
-                        <span style={{
-                          marginLeft: '8px',
-                          fontSize: '14px',
-                          color: complaint.HasBudget ? '#ef4444' : '#10b981',
-                          fontWeight: 'bold'
-                        }}>
-                          {complaint.HasBudget ? 'Yes' : 'No'}
-                        </span>
-                      </div>
-                      <div>
-                        <span style={{
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          color: '#6b7280',
-                          textTransform: 'uppercase'
-                        }}>
-                          Date Submitted:
-                        </span>
-                        <span style={{
-                          marginLeft: '8px',
-                          fontSize: '14px',
-                          color: '#374151'
-                        }}>
-                          {new Date(complaint.CreatedDate).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* PHOTO ATTACHMENT */}
-                    {complaint.PhotoPath && (
-                      <div style={{ marginTop: '12px' }}>
-                        <p style={{
-                          margin: '0 0 8px 0',
-                          fontSize: '14px',
-                          fontWeight: 'bold',
-                          color: '#374151'
-                        }}>
-                          📸 Photo Attachment:
-                        </p>
-                        <img
-                          src={`http://localhost:3001${complaint.PhotoPath}`}
-                          alt="Complaint photo"
-                          style={{
-                            maxWidth: '100%',
-                            maxHeight: '200px',
-                            borderRadius: '8px',
-                            border: '1px solid #d1d5db'
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            {renderComplaintList(getFilteredComplaints(), 'No complaints found in this category.')}
           </div>
         )}
 
@@ -615,6 +638,11 @@ const PresidentDashboard = ({ user, onClose }) => {
           Close
         </button>
       </div>
+
+      {/* NEW: Show All Suggestions */}
+      {showSuggestions && (
+        <AllSuggestions user={user} onClose={() => setShowSuggestions(false)} />
+      )}
     </div>
   );
 };

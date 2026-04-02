@@ -240,13 +240,25 @@ export const getNHCMembers = async (nhcId) => {
   return response.json();
 };
 
+export const getNHCMembersByCode = async (nhcCode) => {
+  const response = await fetch(`${API_URL}/nhc-members-by-code/${encodeURIComponent(nhcCode)}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch NHC members');
+  }
+  return response.json();
+};
+
 // panel APIs
-export const createPanel = async ({ panelName, presidentCnic, nhcId, members, treasurerCnic, viceCnic }) => {
+export const createPanel = async ({ panelName, presidentCnic, nhcId, members, treasurerCnic, viceCnic, complaintId, description, isCommittee }) => {
   const payload = { panelName, presidentCnic, nhcId };
   // dynamic members list takes precedence; legacy fields kept for backwards compatibility
   if (members) payload.members = members;
   if (treasurerCnic) payload.treasurerCnic = treasurerCnic;
   if (viceCnic) payload.viceCnic = viceCnic;
+  if (typeof complaintId !== 'undefined' && complaintId !== null && complaintId !== '') payload.complaintId = complaintId;
+  if (description) payload.description = description;
+  if (isCommittee) payload.isCommittee = true;
   const response = await fetch(`${API_URL}/panels`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -460,6 +472,79 @@ export const getComplaintsByNHC = async (nhcCode) => {
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error || 'Failed to fetch complaints');
+  }
+  return response.json();
+};
+
+export const getComplaintsByUser = async (userCnic) => {
+  const response = await fetch(`${API_URL}/complaints/${userCnic}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch your complaints');
+  }
+  return response.json();
+};
+
+export const saveCommitteeMeetingDecision = async ({ complaintId, remarks, status, decision, minutesFile }) => {
+  const formData = new FormData();
+  if (remarks) formData.append('remarks', remarks);
+  if (status) formData.append('status', status);
+  if (decision) formData.append('decision', decision);
+  if (minutesFile) formData.append('minutesPdf', minutesFile);
+
+  const response = await fetch(`${API_URL}/complaints/${complaintId}/committee-meeting`, {
+    method: 'PUT',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to save meeting decision');
+  }
+  return response.json();
+};
+
+// Suggestion APIs
+export const createSuggestion = async ({ userCnic, userName, nhcCode, title, description }) => {
+  const response = await fetch(`${API_URL}/suggestions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userCnic, userName, nhcCode, title, description })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to submit suggestion');
+  }
+  return response.json();
+};
+
+export const getSuggestionsByNHC = async (nhcCode) => {
+  const response = await fetch(`${API_URL}/suggestions-by-nhc/${nhcCode}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch suggestions');
+  }
+  return response.json();
+};
+
+export const getSuggestionsByUser = async (userCnic) => {
+  const response = await fetch(`${API_URL}/suggestions/${userCnic}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch your suggestions');
+  }
+  return response.json();
+};
+
+export const updateSuggestionStatus = async (id, status, nhcCode) => {
+  const response = await fetch(`${API_URL}/suggestions/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, nhcCode })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update suggestion status');
   }
   return response.json();
 };
