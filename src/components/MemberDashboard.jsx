@@ -469,7 +469,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
           
           {/* Complaints button - Show President Dashboard (only for President) */}
           {isPresident && (
-            <button className="menu-btn" onClick={() => setShowReports(true)}>Complaints</button>
+            <button className="menu-btn" onClick={() => setShowReports(true)}>Dashboard</button>
           )}
           
           {/* Committee button (officers) */}

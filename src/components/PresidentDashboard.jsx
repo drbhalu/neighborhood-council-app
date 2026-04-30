@@ -509,7 +509,7 @@ const PresidentDashboard = ({ user, onClose }) => {
                   cursor: 'pointer'
                 }}
               >
-                Complaints
+               OVERVIEW
               </button>
               <button
                 onClick={() => setShowSuggestions(true)}

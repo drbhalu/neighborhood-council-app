@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getBudgetRequests, getComplaintHistory, getBudgetStats, getBudgetHistory, releaseBudget, rejectBudget } from '../api';
+import { getBudgetRequests, getComplaintHistory, getBudgetStats, getBudgetAvailable, getBudgetHistory, releaseBudget, rejectBudget } from '../api';
 
 const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   const [budgetRequests, setBudgetRequests] = useState([]);
@@ -181,7 +181,10 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
     const loadStats = async () => {
       if (!nhcCode) return;
       try {
-        const statsData = await getBudgetStats(nhcCode);
+        const [statsData, budgetData] = await Promise.all([
+          getBudgetStats(nhcCode),
+          getBudgetAvailable(nhcCode),
+        ]);
         setStats({
           totalRequests: statsData.totalRequests || 0,
           approvedRequests: statsData.approvedRequests || 0,
@@ -191,7 +194,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
           pendingAllocation: statsData.pendingAllocation || 0,
           totalAllocatedAmount: statsData.totalAllocatedAmount || 0,
           totalReleasedAmount: statsData.totalReleasedAmount || 0,
-          totalBudgetAvailable: Number.parseFloat(statsData.totalBudgetAvailable) || 0,
+          totalBudgetAvailable: Number.parseFloat(budgetData?.availableBudget ?? statsData.totalBudgetAvailable) || 0,
         });
       } catch (err) {
         console.warn('Failed to load budget statistics:', err.message);
