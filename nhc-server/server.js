@@ -73,6 +73,9 @@ const complaintUpload = multer({
 
 // Serve complaint photos as static files
 app.use('/complaint-photos', express.static(COMPLAINT_PHOTOS_DIR));
+// Backward-compat fallback: some meeting evidence was saved with /complaint-photos
+// path while the file is actually stored in meeting-minutes.
+app.use('/complaint-photos', express.static(MEETING_MINUTES_DIR));
 
 // --- MULTER CONFIGURATION FOR COMMITTEE MEETING EVIDENCE (IMAGE/PDF) ---
 const meetingMinutesStorage = multer.diskStorage({
@@ -253,6 +256,11 @@ async function initDB() {
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'Role' AND Object_ID = OBJECT_ID('Notifications'))
       ALTER TABLE Notifications ADD Role NVARCHAR(50) NULL;
+    `);
+    // add NHC_Code column if missing (to track which NHC the notification is for)
+    await nhcPool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'NHC_Code' AND Object_ID = OBJECT_ID('Notifications'))
+      ALTER TABLE Notifications ADD NHC_Code NVARCHAR(100) NULL;
     `);
     console.log("✓ Table Notifications ready.");
 
@@ -1799,14 +1807,15 @@ app.post('/api/request', async (req, res) => {
 // 8. SEND NOTIFICATION (From Admin)
 app.post('/api/notification', async (req, res) => {
   console.log("POST /api/notification called...");
-  const { recipientCnic, message } = req.body;
+  const { recipientCnic, message, nhcCode } = req.body;
   let pool;
   try {
     pool = await sql.connect(dbConfig);
     const result = await pool.request()
       .input('RecipientCNIC', sql.NVarChar, recipientCnic)
       .input('Message', sql.NVarChar(sql.MAX), message)
-      .query("INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message); SELECT SCOPE_IDENTITY() as id");
+      .input('NHC_Code', sql.NVarChar, nhcCode || null)
+      .query("INSERT INTO Notifications (RecipientCNIC, Message, NHC_Code) VALUES (@RecipientCNIC, @Message, @NHC_Code); SELECT SCOPE_IDENTITY() as id");
     
     const id = result.recordset[0].id;
     console.log("✓ Notification Sent with ID:", id);
@@ -1891,13 +1900,14 @@ app.post('/api/panels/:id/schedule-meeting', async (req, res) => {
 
 // 10. GET NOTIFICATIONS (For User Dashboard)
 app.get('/api/notifications', async (req, res) => {
-  const { cnic } = req.query;
+  const { cnic, nhcCode } = req.query;
   let pool;
   try {
     pool = await sql.connect(dbConfig);
     let result = await pool.request()
       .input('CNIC', sql.NVarChar, cnic)
-      .query("SELECT * FROM Notifications WHERE RecipientCNIC = @CNIC ORDER BY CreatedDate DESC");
+      .input('NHC_Code', sql.NVarChar, nhcCode || null)
+      .query("SELECT * FROM Notifications WHERE RecipientCNIC = @CNIC AND (NHC_Code = @NHC_Code OR NHC_Code IS NULL) ORDER BY CreatedDate DESC");
     
     res.json(result.recordset);
   } catch (err) {
@@ -2497,6 +2507,10 @@ app.put('/api/complaints/:id/committee-meeting', meetingMinutesUpload.single('mi
 
     const hasBudgetFlag = decision === 'budget' ? 1 : 0;
 
+    // In this route uploads are stored by meetingMinutesUpload, so keep the
+    // stored path aligned with the actual folder to avoid broken URLs.
+    const resolutionPhotoPath = decision === 'solved' && req.file ? `/meeting-minutes/${req.file.filename}` : null;
+
     await pool.request()
       .input('Id', sql.Int, complaintId)
       .input('CommitteeRemarks', sql.NVarChar(sql.MAX), mergedRemarks || null)
@@ -2517,6 +2531,18 @@ app.put('/api/complaints/:id/committee-meeting', meetingMinutesUpload.single('mi
             UpdatedDate = GETDATE()
         WHERE Id = @Id
       `);
+
+    // If resolution photo was uploaded, also update ResolutionPhotoPaths
+    if (resolutionPhotoPath) {
+      await pool.request()
+        .input('Id', sql.Int, complaintId)
+        .input('ResolutionPhotoPaths', sql.NVarChar(sql.MAX), resolutionPhotoPath)
+        .query(`
+          UPDATE Complaints
+          SET ResolutionPhotoPaths = @ResolutionPhotoPaths
+          WHERE Id = @Id
+        `);
+    }
 
     await logComplaintActivity(pool, {
       complaintId,
@@ -2570,22 +2596,38 @@ app.put('/api/complaints/:id/committee-meeting', meetingMinutesUpload.single('mi
           if (row.MemberCNIC) recipients.add(String(row.MemberCNIC));
         });
 
-        const solvedMessage = `Complaint (${owner.Category || 'Complaint'}) has been marked as resolved by the president.`;
-        for (const recipientCnic of recipients) {
-          await pool.request()
-            .input('RecipientCNIC', sql.NVarChar, recipientCnic)
-            .input('Message', sql.NVarChar(sql.MAX), solvedMessage)
-            .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
-        }
+          // Fetch owner name for clearer notifications
+          let ownerName = '';
+          try {
+            const userNameRes = await pool.request()
+              .input('CNIC', sql.NVarChar, owner.UserCNIC)
+              .query('SELECT FirstName, LastName FROM Users WHERE CNIC = @CNIC');
+            if (userNameRes.recordset.length > 0) {
+              const u = userNameRes.recordset[0];
+              ownerName = `${(u.FirstName || '').trim()} ${(u.LastName || '').trim()}`.trim();
+            }
+          } catch (_) {
+            ownerName = '';
+          }
+
+          const ownerLabel = ownerName || 'Complainant';
+          const solvedMessage = `${ownerLabel}, your complaint (${owner.Category || 'Complaint'}) (ID: ${complaintId}) has been marked as resolved by the president.`;
+          for (const recipientCnic of recipients) {
+            await pool.request()
+              .input('RecipientCNIC', sql.NVarChar, recipientCnic)
+              .input('Message', sql.NVarChar(sql.MAX), solvedMessage)
+              .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
+          }
       } else if (normalizedStatus === 'Pending President Review') {
+        // include owner name when notifying complainant
         await pool.request()
           .input('RecipientCNIC', sql.NVarChar, owner.UserCNIC)
-          .input('Message', sql.NVarChar(sql.MAX), `Committee recommended resolution for your complaint (${owner.Category || 'Complaint'}). It is now pending president review.`)
+          .input('Message', sql.NVarChar(sql.MAX), `${ownerLabel}, the committee recommended a resolution for your complaint (${owner.Category || 'Complaint'}). It is now pending president review.`)
           .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
       } else {
         await pool.request()
           .input('RecipientCNIC', sql.NVarChar, owner.UserCNIC)
-          .input('Message', sql.NVarChar(sql.MAX), `Committee meeting updated your complaint (${owner.Category || 'Complaint'}). It is waiting for president final review.`)
+          .input('Message', sql.NVarChar(sql.MAX), `${ownerLabel}, your complaint (${owner.Category || 'Complaint'}) was updated in a committee meeting and is waiting for president final review.`)
           .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
       }
     } catch (notifyErr) {
@@ -2648,6 +2690,21 @@ app.put('/api/complaints/:id/president-approval', async (req, res) => {
     }
 
     const complaint = complaintRes.recordset[0];
+
+    // Fetch complainant's name for clearer notifications
+    let ownerName = '';
+    try {
+      const userNameRes = await pool.request()
+        .input('CNIC', sql.NVarChar, complaint.UserCNIC)
+        .query('SELECT FirstName, LastName FROM Users WHERE CNIC = @CNIC');
+      if (userNameRes.recordset.length > 0) {
+        const u = userNameRes.recordset[0];
+        ownerName = `${(u.FirstName || '').trim()} ${(u.LastName || '').trim()}`.trim();
+      }
+    } catch (_) {
+      ownerName = '';
+    }
+    const ownerLabel = ownerName || 'Complainant';
 
     // Verify president has authority for this NHC
     let isPresident = String(presidentRes.recordset[0].Role || '').toLowerCase() === 'president';
@@ -2765,10 +2822,10 @@ app.put('/api/complaints/:id/president-approval', async (req, res) => {
     try {
       const messageMap = {
         'approve': isBudgetApproval
-          ? `✅ Your budget request for Complaint #${complaintId} was APPROVED by the president. The treasurer can now release the funds to the committee.`
-          : `✅ Your decision on Complaint #${complaintId} was APPROVED by the president. Complaint is now RESOLVED.`,
-        'reject': `❌ Your decision on Complaint #${complaintId} was REJECTED by the president. Feedback: ${presidentComments}`,
-        'request-changes': `📝 President requested changes for Complaint #${complaintId}. Feedback: ${presidentComments}`
+          ? `✅ ${ownerLabel}, your budget request for Complaint #${complaintId} was APPROVED by the president. The treasurer can now release the funds to the committee.`
+          : `✅ ${ownerLabel}, your complaint (ID: ${complaintId}) has been APPROVED by the president and marked as Resolved.`,
+        'reject': `❌ ${ownerLabel}, your complaint (ID: ${complaintId}) was REJECTED by the president. Feedback: ${presidentComments}`,
+        'request-changes': `📝 ${ownerLabel}, the president requested changes for Complaint #${complaintId}. Feedback: ${presidentComments}`
       };
 
       // Notify committee
@@ -2794,8 +2851,8 @@ app.put('/api/complaints/:id/president-approval', async (req, res) => {
         await pool.request()
           .input('RecipientCNIC', sql.NVarChar, complaint.UserCNIC)
           .input('Message', sql.NVarChar(sql.MAX), isBudgetApproval
-            ? `✅ Your budget request for Complaint #${complaintId} was approved by the president.`
-            : `✅ Your complaint has been RESOLVED by the president.`)
+            ? `✅ ${ownerLabel}, your budget request for Complaint #${complaintId} was approved by the president. The treasurer can now release the funds.`
+            : `✅ ${ownerLabel}, your complaint (ID: ${complaintId}) has been resolved following the president's approval.`)
           .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
       }
     } catch (notifyErr) {
@@ -2833,9 +2890,7 @@ app.put('/api/complaints/:id/allocate-budget', async (req, res) => {
       return res.status(400).json({ error: 'Valid allocated amount is required' });
     }
 
-    if (!budgetCategory) {
-      return res.status(400).json({ error: 'Budget category is required' });
-    }
+    // budgetCategory is optional for allocation; do not reject when missing
 
     if (!treasurerCnic) {
       return res.status(400).json({ error: 'Treasurer CNIC is required' });
@@ -2909,7 +2964,9 @@ app.put('/api/complaints/:id/allocate-budget', async (req, res) => {
       actorCnic: treasurerCnic,
       actorRole: 'treasurer',
       actionType: 'budget-allocated',
-      remarksSnapshot: `Budget of ${allocatedAmount} allocated to category: ${budgetCategory}`,
+      remarksSnapshot: budgetCategory
+        ? `Budget of ${allocatedAmount} allocated to category: ${budgetCategory}`
+        : `Budget of ${allocatedAmount} allocated`,
       decisionSnapshot: null,
       minutesPathSnapshot: null,
       resolutionPhotosSnapshot: null,
@@ -3120,9 +3177,7 @@ app.put('/api/complaints/:id/release-budget', async (req, res) => {
       if (!allocatedAmount || allocatedAmount <= 0) {
         return res.status(400).json({ error: 'Valid allocated amount is required to release budget' });
       }
-      if (!budgetCategory) {
-        return res.status(400).json({ error: 'Budget category is required to release budget' });
-      }
+      // budgetCategory is optional for release; we will accept releases without a category
 
       // Check available budget
       const availableRes = await pool.request()
@@ -3152,6 +3207,9 @@ app.put('/api/complaints/:id/release-budget', async (req, res) => {
       allocationFields = ', BudgetCategory = @BudgetCategory';
     }
 
+    // CRITICAL: Budget release should NEVER change complaint Status.
+    // Only update budget-related fields: BudgetAllocationStatus, timestamps, and allocation amounts.
+    // Do NOT update Status, HasBudget, MeetingDecision, or any other fields.
     await request.query(`
       UPDATE Complaints
       SET BudgetAllocationStatus = @BudgetAllocationStatus,

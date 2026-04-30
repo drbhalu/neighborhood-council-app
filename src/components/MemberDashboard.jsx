@@ -19,6 +19,7 @@ import CreateCommitteeScreen from './CreateCommitteeScreen';
 import CommitteeMeetingScreen from './CommitteeMeetingScreen';
 import SuggestionsForm from './SuggestionsForm'; // NEW: Added Import
 import TreasurerBudgetManagement from './TreasurerBudgetManagement'; // NEW: Added Import
+import BudgetRequestForm from './BudgetRequestForm'; // Added Import
 import { updateUser, getComplaintsByNHC, getPanels, getUserRoleInNHC } from '../api';
 import logo from '../assets/logo.png';
  
@@ -35,6 +36,8 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
   const [showMyComplaints, setShowMyComplaints] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false); // NEW: State for Suggestions Form
   const [showTreasurerBudget, setShowTreasurerBudget] = useState(false); // NEW: State for Treasurer Budget
+  const [showBudgetRequest, setShowBudgetRequest] = useState(false); // State for Budget Request
+  const [budgetRequestCommitteeId, setBudgetRequestCommitteeId] = useState(null); // Committee ID for budget request
   const [complaints, setComplaints] = useState([]);
   const [complaintStatsLoading, setComplaintStatsLoading] = useState(false);
   const [memberCommittees, setMemberCommittees] = useState([]);
@@ -469,7 +472,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
           
           {/* Complaints button - Show President Dashboard (only for President) */}
           {isPresident && (
-            <button className="menu-btn" onClick={() => setShowReports(true)}>Dashboard</button>
+            <button className="menu-btn" onClick={() => setShowReports(true)}>Complaints</button>
           )}
           
           {/* Committee button (officers) */}
@@ -509,6 +512,16 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
           onSuccess={() => {
             // Optional: refresh data or show success message
           }}
+        />
+      )}
+
+      {/* Budget Request Form */}
+      {showBudgetRequest && (
+        <BudgetRequestForm
+          user={currentUser}
+          nhcId={currentUser.nhcId}
+          committeeId={budgetRequestCommitteeId}
+          onClose={() => setShowBudgetRequest(false)}
         />
       )}
 
@@ -730,6 +743,24 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
                       >
                         Open Committee
                       </button>
+                      <button
+                        onClick={() => {
+                          setBudgetRequestCommitteeId(group.id);
+                          setShowBudgetRequest(true);
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          border: 'none',
+                          borderRadius: '8px',
+                          backgroundColor: '#0ea5e9',
+                          color: 'white',
+                          fontSize: '13px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Request Budget
+                      </button>
                     </div>
                   </div>
                 ))
@@ -875,25 +906,6 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
                         }}
                       >
                         Call Meeting
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSelectedCommittee(committee);
-                          setCommitteeView('money');
-                        }}
-                        style={{
-                          padding: '8px 10px',
-                          border: 'none',
-                          borderRadius: '8px',
-                          backgroundColor: '#16a34a',
-                          color: 'white',
-                          fontSize: '13px',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Request Budget
                       </button>
 
                     </div>

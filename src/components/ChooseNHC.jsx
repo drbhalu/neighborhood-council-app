@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './AdminDashboard.css';
+import logo from '../assets/logo.png';
 
 const ChooseNHC = ({ user, onSelect, onCancel }) => {
   const options = user.nhcOptions || [];
@@ -18,7 +19,8 @@ const ChooseNHC = ({ user, onSelect, onCancel }) => {
       className="admin-dashboard-container"
       style={{ textAlign: "center", padding: "40px 20px" }}
     >
-      <h2 style={{ fontSize: "24px", marginBottom: "30px" }}>Select NHC</h2>
+      <img src={logo} alt="NHC Logo" style={{ width: 100, height: 'auto', marginBottom: 16 }} />
+      <h2 style={{ fontSize: "24px", marginBottom: "30px" }}>Select Your Home NHC</h2>
 
       {options.length === 0 && (
         <p>No council information available for your account.</p>

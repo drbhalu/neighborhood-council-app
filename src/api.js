@@ -100,8 +100,12 @@ export const sendNotification = async (data) => {
   return response.json();
 };
 
-export const getNotifications = async (cnic) => {
-  const response = await fetch(`${API_URL}/notifications?cnic=${cnic}`);
+export const getNotifications = async (cnic, nhcCode) => {
+  let url = `${API_URL}/notifications?cnic=${cnic}`;
+  if (nhcCode) {
+    url += `&nhcCode=${encodeURIComponent(nhcCode)}`;
+  }
+  const response = await fetch(url);
   return response.json();
 };
 

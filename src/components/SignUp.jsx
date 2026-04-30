@@ -67,60 +67,80 @@ const SignUp = ({ onSwitchToLogin, onSignupSuccess, nhcList }) => {
   };
 
   const getLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by this browser.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
           const userLat = position.coords.latitude;
           const userLng = position.coords.longitude;
           const userPoint = { lat: userLat, lng: userLng };
 
-          // --- DEBUG LOG 1: User Location ---
-          console.log("User Location:", userPoint);
+          console.log("✓ User Location retrieved:", userPoint);
 
+          // Fetch address from Nominatim
           let locationAddress = "Unknown Location";
           try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLat}&lon=${userLng}`);
-            const data = await response.json();
-            locationAddress = data.display_name || "Unknown Location";
-          } catch (err) { console.log("Address fetch error"); }
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLat}&lon=${userLng}`,
+              { timeout: 5000 }
+            );
+            if (response.ok) {
+              const data = await response.json();
+              locationAddress = data.display_name || "Unknown Location";
+              console.log("✓ Address retrieved:", locationAddress);
+            } else {
+              console.warn("Nominatim returned status:", response.status);
+            }
+          } catch (err) {
+            console.warn("Address fetch error (non-critical):", err.message);
+          }
 
-          // --- DEBUG LOG 2: NHC List ---
-          // Using 'nhcList' directly since we destructured it in arguments
+          // Check NHC list
           console.log("Checking against NHC List:", nhcList);
+          if (!nhcList || nhcList.length === 0) {
+            console.warn("⚠ NHC list is empty or undefined");
+            setFormData({ ...formData, location: locationAddress, nhcCode: '' });
+            alert(`Location: ${locationAddress}\n\n⚠ Warning: NHC list not loaded. Please reload and try again.`);
+            return;
+          }
 
           let foundNHC = null;
-          // Ensure list exists
-          const listToCheck = nhcList || []; 
-          
-          for (let nhc of listToCheck) {
-               // --- DEBUG LOG 3: Checking Zone ---
-               console.log(`Checking Zone: ${nhc.name}`);
-               console.log(`Polygon Points:`, nhc.points);
-               
-               const isInside = isPointInPolygon(userPoint, nhc.points);
-               console.log(`Is User Inside? ${isInside}`);
-
-               if (isInside) { 
-                 foundNHC = nhc.name; 
-                 console.log("MATCH FOUND!");
-                 break; 
-               }
+          for (let nhc of nhcList) {
+            console.log(`Checking Zone: ${nhc.name}`);
+            if (!nhc.points || nhc.points.length === 0) {
+              console.warn(`⚠ Zone ${nhc.name} has no polygon points`);
+              continue;
+            }
+            const isInside = isPointInPolygon(userPoint, nhc.points);
+            if (isInside) {
+              foundNHC = nhc.name;
+              console.log("✓ MATCH FOUND:", foundNHC);
+              break;
+            }
           }
 
-          // Store only location address name (not coordinates)
           if (foundNHC) {
             setFormData({ ...formData, location: locationAddress, nhcCode: foundNHC });
-            alert(`Found NHC: ${foundNHC}\nLocation: ${locationAddress}`);
+            alert(`✓ Found NHC: ${foundNHC}\nLocation: ${locationAddress}`);
           } else {
             setFormData({ ...formData, location: locationAddress, nhcCode: '' });
-            alert("No NHC Found in this area.\nLocation: " + locationAddress);
+            alert(`No NHC found in your area.\nLocation: ${locationAddress}\n\nYou can still proceed or select an NHC manually.`);
           }
-        },
-        (error) => { alert("Unable to retrieve your location."); }
-      );
-    } else {
-      alert("Geolocation is not supported by this browser.");
-    }
+        } catch (err) {
+          console.error("Unexpected error in location handler:", err);
+          alert("Error processing location: " + err.message);
+        }
+      },
+      (error) => {
+        // Silently log error; don't show alert
+        console.error("Geolocation error:", error.code, error.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
    const handleSubmit = async (e) => {

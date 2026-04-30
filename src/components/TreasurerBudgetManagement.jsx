@@ -27,7 +27,6 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
     ? stats.totalBudgetAvailable
     : Math.max(0, stats.totalAllocatedAmount - stats.totalReleasedAmount);
   const [viewMode, setViewMode] = useState('approved');
-  const [budgetCategory, setBudgetCategory] = useState('');
   const [allocatedAmount, setAllocatedAmount] = useState('');
   const [allocationError, setAllocationError] = useState('');
   const [isAllocating, setIsAllocating] = useState(false);
@@ -224,7 +223,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   useEffect(() => {
     if (!selectedRequest) return;
     const { amount } = parseBudgetDetails(selectedRequest.CommitteeRemarks);
-    setBudgetCategory(selectedRequest.BudgetCategory || '');
+    // Do not use BudgetCategory in treasurer screen anymore
     setAllocatedAmount(
       selectedRequest.BudgetAllocatedAmount > 0
         ? String(selectedRequest.BudgetAllocatedAmount)
@@ -440,14 +439,10 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
             </h3>
             {allocation === 'allocated' ? (
               <div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px', marginBottom: '16px' }}>
                   <div>
                     <strong>Allocated Amount</strong>
                     <p style={{ margin: '6px 0 0 0', color: '#111827' }}>PKR {selectedRequest.BudgetAllocatedAmount || '0.00'}</p>
-                  </div>
-                  <div>
-                    <strong>Budget Category</strong>
-                    <p style={{ margin: '6px 0 0 0', color: '#111827' }}>{selectedRequest.BudgetCategory || 'Not assigned'}</p>
                   </div>
                 </div>
                 <button
@@ -473,28 +468,9 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
             ) : (
               <div>
                 <p style={{ margin: '0 0 12px 0', color: '#1f2937' }}>
-                  This approved request has been forwarded to the treasurer. Fill in the budget category and amount, then release it to the committee.
+                  This approved request has been forwarded to the treasurer. Enter the amount to release, then send it to the committee.
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#4338ca', marginBottom: '8px' }}>
-                      Budget Category
-                    </label>
-                    <select
-                      value={budgetCategory}
-                      onChange={(e) => setBudgetCategory(e.target.value)}
-                      style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #c7d2fe', fontSize: '14px' }}
-                    >
-                      <option value="">Choose category</option>
-                      <option value="Emergency">Emergency</option>
-                      <option value="Operations">Operations</option>
-                      <option value="Maintenance">Maintenance</option>
-                      <option value="Programs">Programs</option>
-                      <option value="Infrastructure">Infrastructure</option>
-                      <option value="Community Outreach">Community Outreach</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#4338ca', marginBottom: '8px' }}>
                       Amount to Release
@@ -524,10 +500,6 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
                   <button
                     onClick={async () => {
                       const amount = parseFloat(allocatedAmount);
-                      if (!budgetCategory) {
-                        setAllocationError('Please select a budget category.');
-                        return;
-                      }
                       if (!amount || amount <= 0) {
                         setAllocationError('Please enter a valid budget amount.');
                         return;
@@ -539,7 +511,8 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
                       try {
                         setAllocationError('');
                         setIsAllocating(true);
-                        await releaseBudget(selectedRequest.Id, user.cnic, amount, budgetCategory);
+                        // Release budget without category
+                        await releaseBudget(selectedRequest.Id, user.cnic, amount);
                         setError('');
                         setSelectedRequest(null);
                         setRefreshKey((prev) => prev + 1);
@@ -832,10 +805,6 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
                       <div style={{ fontSize: '16px', fontWeight: '700', color: '#111827' }}>
                         {item.BudgetAllocatedAmount != null ? `PKR ${Number(item.BudgetAllocatedAmount).toFixed(2)}` : 'N/A'}
                       </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '12px', color: '#374151', marginBottom: '4px' }}>Category</div>
-                      <div style={{ fontSize: '16px', fontWeight: '700', color: '#111827' }}>{item.BudgetCategory || 'N/A'}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: '12px', color: '#374151', marginBottom: '4px' }}>Status</div>

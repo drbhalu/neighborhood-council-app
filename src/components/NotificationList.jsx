@@ -7,13 +7,17 @@ const NotificationList = ({ user, onClose }) => {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const data = await getNotifications(user.cnic);
+        const data = await getNotifications(user.cnic, user.nhcCode);
         setNotifications(data);
       } catch (err) {
         console.error("Failed to fetch notifications", err);
       }
     };
-    if(user && user.cnic) fetchNotifications();
+    if(user && user.cnic) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 10000); // Poll every 10 seconds
+      return () => clearInterval(interval);
+    }
   }, [user]);
 
   return (
@@ -40,7 +44,7 @@ const NotificationList = ({ user, onClose }) => {
                 borderBottom: '1px solid #eee', padding: '10px 0'
               }}>
               <p style={{ margin: '0', fontSize: '14px', fontWeight: 'bold' }}>Message:</p>
-              <p style={{ margin: '5px 0 0 0' }}>{note.Message}</p>
+              <p style={{ margin: '5px 0 0 0', whiteSpace: 'pre-line' }}>{note.Message}</p>
               {note.PanelId && note.Role && (
                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                   <button

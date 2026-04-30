@@ -70,8 +70,7 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
           </button>
         </div>
 
-        <p style={styles.description}>Schedule a committee meeting and send a notification to all committee members.</p>
-
+        
         <div style={styles.fieldGroup}>
           <label style={styles.label}>Committee</label>
           <div style={styles.textBox}>{committeeName}</div>

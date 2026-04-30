@@ -509,7 +509,7 @@ const PresidentDashboard = ({ user, onClose }) => {
                   cursor: 'pointer'
                 }}
               >
-               OVERVIEW
+                Complaints
               </button>
               <button
                 onClick={() => setShowSuggestions(true)}
@@ -1118,6 +1118,7 @@ const PresidentDashboard = ({ user, onClose }) => {
               <CommitteeMeetingScreen
                 committee={selectedComplaintForReview}
                 user={user}
+                nhcCode={user.nhcCode}
                 allowPresidentReview={true}
                 onBack={() => {
                   setShowFinalReview(false);
