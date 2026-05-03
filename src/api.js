@@ -281,8 +281,7 @@ export const getNHCMembersByCode = async (nhcCode) => {
   return response.json();
 };
 
-// panel APIs
-export const createPanel = async ({ panelName, presidentCnic, nhcId, members, treasurerCnic, viceCnic, complaintId, description, isCommittee }) => {
+export const createPanel = async ({ panelName, presidentCnic, nhcId, members, treasurerCnic, viceCnic, complaintId, description, isCommittee, nominationId }) => {
   const payload = { panelName, presidentCnic, nhcId };
   // dynamic members list takes precedence; legacy fields kept for backwards compatibility
   if (members) payload.members = members;
@@ -291,6 +290,7 @@ export const createPanel = async ({ panelName, presidentCnic, nhcId, members, tr
   if (typeof complaintId !== 'undefined' && complaintId !== null && complaintId !== '') payload.complaintId = complaintId;
   if (description) payload.description = description;
   if (isCommittee) payload.isCommittee = true;
+  if (nominationId) payload.nominationId = nominationId;
   const response = await fetch(`${API_URL}/panels`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -333,6 +333,7 @@ export const getPanels = async (filters = {}) => {
   const params = new URLSearchParams();
   if (filters.nhcId) params.append('nhcId', filters.nhcId);
   if (filters.cnic) params.append('cnic', filters.cnic);
+  if (filters.nominationId) params.append('nominationId', filters.nominationId);
   if (filters.committeeOnly) params.append('committeeOnly', 'true');
   const response = await fetch(`${API_URL}/panels?${params.toString()}`);
   if (!response.ok) {
@@ -826,6 +827,30 @@ export const requestBudgetChanges = async (complaintId, presidentCnic, president
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error || 'Failed to request budget changes');
+  }
+  return response.json();
+};
+
+// SET ACTIVE PANEL: when election ends, activate the winning panel as the NHC's official team
+export const setActivePanelAsWinner = async (nhcId, panelId) => {
+  const response = await fetch(`${API_URL}/nhc/${nhcId}/active-panel`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ panelId })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to set active panel');
+  }
+  return response.json();
+};
+
+// GET ACTIVE PANEL MEMBERS: returns current leadership of an NHC
+export const getActivePanelMembers = async (nhcId) => {
+  const response = await fetch(`${API_URL}/nhc/${nhcId}/active-panel-members`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch active panel members');
   }
   return response.json();
 };

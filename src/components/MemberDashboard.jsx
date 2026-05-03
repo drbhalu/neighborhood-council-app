@@ -132,7 +132,26 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
     };
     
     verifyRoleForNHC();
-  }, [currentUser.nhcCode]); // Re-verify whenever nhcCode changes
+  }, [currentUser.cnic, currentUser.nhcCode]); // Re-verify whenever cnic or nhcCode changes
+
+  // Verify role on component mount to clear stale cached role after election ends
+  useEffect(() => {
+    const verifyRoleOnMount = async () => {
+      if (!currentUser?.cnic || !currentUser?.nhcCode) return;
+      
+      try {
+        const roleResponse = await getUserRoleInNHC(currentUser.cnic, currentUser.nhcCode);
+        const verifiedRole = roleResponse.role;
+        
+        // Update currentUser with verified role from backend (clears stale cache)
+        setCurrentUser(prev => ({ ...prev, role: verifiedRole }));
+      } catch (err) {
+        console.error('Error verifying role on dashboard mount:', err);
+      }
+    };
+    
+    verifyRoleOnMount();
+  }, []); // Run once on component mount
 
   useEffect(() => {
     if (currentUser?.cnic) {
@@ -472,7 +491,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
           
           {/* Complaints button - Show President Dashboard (only for President) */}
           {isPresident && (
-            <button className="menu-btn" onClick={() => setShowReports(true)}>Complaints</button>
+            <button className="menu-btn" onClick={() => setShowReports(true)}>Dashboard</button>
           )}
           
           {/* Committee button (officers) */}

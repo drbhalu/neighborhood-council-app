@@ -416,6 +416,12 @@ async function initDB() {
       ALTER TABLE NHC_Zones DROP COLUMN ElectionDate;
     `);
 
+    // Add ActivePanelId column to NHC_Zones to track which panel is currently running the NHC
+    await nhcPool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'ActivePanelId' AND Object_ID = OBJECT_ID('NHC_Zones'))
+      ALTER TABLE NHC_Zones ADD ActivePanelId INT NULL;
+    `);
+
     // Create Nominations Table
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Nominations' AND xtype='U')
@@ -618,6 +624,10 @@ async function initDB() {
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'IsCommittee' AND Object_ID = OBJECT_ID('Panels'))
       ALTER TABLE Panels ADD IsCommittee BIT DEFAULT 0;
+    `);
+    await nhcPool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'NominationId' AND Object_ID = OBJECT_ID('Panels'))
+      ALTER TABLE Panels ADD NominationId INT NULL;
     `);
     await nhcPool.request().query(`
       IF EXISTS (SELECT * FROM sysobjects WHERE name='PanelMembers' AND xtype='U')
@@ -1356,6 +1366,60 @@ app.delete('/api/nhc/election/:nhcId', async (req, res) => {
   }
 });
 
+// 2.7a SET ACTIVE PANEL: when election ends, activate the winning panel as the NHC's official team
+app.put('/api/nhc/:nhcId/active-panel', async (req, res) => {
+  console.log("PUT /api/nhc/:nhcId/active-panel called...", req.params);
+  const nhcId = parseInt(req.params.nhcId, 10);
+  const { panelId } = req.body;
+
+  if (!nhcId || !panelId) {
+    return res.status(400).json({ error: 'nhcId and panelId are required' });
+  }
+
+  let pool;
+  try {
+    pool = await sql.connect(dbConfig);
+
+    // Verify the panel exists and belongs to this NHC
+    const panelRes = await pool.request()
+      .input('PanelId', sql.Int, panelId)
+      .input('NHC_Id', sql.Int, nhcId)
+      .query('SELECT Id FROM Panels WHERE Id = @PanelId AND NHC_Id = @NHC_Id');
+
+    if (panelRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'Panel not found for this NHC' });
+    }
+
+    // Mark all old panels for this NHC as inactive
+    await pool.request()
+      .input('NHC_Id', sql.Int, nhcId)
+      .input('ActivePanelId', sql.Int, panelId)
+      .query(`
+        UPDATE Panels
+        SET Status = 'inactive'
+        WHERE NHC_Id = @NHC_Id AND Id != @ActivePanelId AND IsCommittee = 0
+      `);
+
+    // Set the winning panel as active for the NHC
+    await pool.request()
+      .input('NHC_Id', sql.Int, nhcId)
+      .input('ActivePanelId', sql.Int, panelId)
+      .query(`
+        UPDATE NHC_Zones
+        SET ActivePanelId = @ActivePanelId
+        WHERE Id = @NHC_Id
+      `);
+
+    console.log("✓ Activated panel", panelId, "for NHC", nhcId);
+    res.json({ message: 'Active panel set successfully', nhcId, panelId });
+  } catch (err) {
+    console.error('Set active panel error:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
 // 2.7 GET ALL NOMINATIONS (filtered by NHC if nhcId provided)
 app.get('/api/nominations', async (req, res) => {
   console.log("GET /api/nominations called...", req.query);
@@ -1981,7 +2045,38 @@ app.get('/api/user-role', async (req, res) => {
   try {
     pool = await sql.connect(dbConfig);
     
-    // Query UserNHCs table for this user's role in this specific NHC
+    // First, get the NHC_Id from NHC_Code
+    const nhcRes = await pool.request()
+      .input('Name', sql.NVarChar, nhcCode)
+      .query('SELECT Id, ActivePanelId FROM NHC_Zones WHERE Name = @Name');
+    
+    if (nhcRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'NHC not found' });
+    }
+
+    const nhcId = nhcRes.recordset[0].Id;
+    const activePanelId = nhcRes.recordset[0].ActivePanelId;
+
+    // If there's an active panel, get role from the active panel members
+    if (activePanelId) {
+      const panelMemberRes = await pool.request()
+        .input('PanelId', sql.Int, activePanelId)
+        .input('CNIC', sql.NVarChar, cnic)
+        .query(`
+          SELECT Role 
+          FROM PanelMembers 
+          WHERE PanelId = @PanelId 
+          AND CNIC = @CNIC
+          AND InviteStatus = 'accepted'
+        `);
+
+      if (panelMemberRes.recordset.length > 0) {
+        const role = panelMemberRes.recordset[0].Role || 'Member';
+        return res.json({ role });
+      }
+    }
+
+    // Fallback to UserNHCs table if not in active panel
     const result = await pool.request()
       .input('CNIC', sql.NVarChar, cnic)
       .input('NHC_Code', sql.NVarChar, nhcCode)
@@ -1993,7 +2088,7 @@ app.get('/api/user-role', async (req, res) => {
       `);
 
     if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'User not found in this NHC' });
+      return res.json({ role: 'Member' });
     }
 
     const role = result.recordset[0].Role || 'Member';
@@ -4051,6 +4146,7 @@ const ensurePanelTablesExist = async (pool) => {
       PanelName NVARCHAR(100),
       PresidentCNIC NVARCHAR(20) NOT NULL,
       NHC_Id INT NOT NULL,
+      NominationId INT NULL,
       ComplaintId INT NULL,
       Description NVARCHAR(MAX) NULL,
       IsCommittee BIT DEFAULT 0,
@@ -4062,6 +4158,11 @@ const ensurePanelTablesExist = async (pool) => {
   await pool.request().query(`
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'ComplaintId' AND Object_ID = OBJECT_ID('Panels'))
     ALTER TABLE Panels ADD ComplaintId INT NULL;
+  `);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'NominationId' AND Object_ID = OBJECT_ID('Panels'))
+    ALTER TABLE Panels ADD NominationId INT NULL;
   `);
 
   await pool.request().query(`
@@ -4193,9 +4294,60 @@ app.get('/api/nhc/:id/members', async (req, res) => {
   }
 });
 
+// GET ACTIVE PANEL MEMBERS: returns current leadership of an NHC (from active panel)
+app.get('/api/nhc/:id/active-panel-members', async (req, res) => {
+  const nhcId = parseInt(req.params.id, 10);
+  if (!nhcId) return res.status(400).json({ error: 'NHC id required' });
+  let pool;
+  try {
+    pool = await new sql.ConnectionPool(dbConfig).connect();
+    
+    // Get the active panel for this NHC
+    const nhcRes = await pool.request()
+      .input('NHC_Id', sql.Int, nhcId)
+      .query('SELECT ActivePanelId FROM NHC_Zones WHERE Id = @NHC_Id');
+    
+    if (nhcRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'NHC not found' });
+    }
+
+    const activePanelId = nhcRes.recordset[0].ActivePanelId;
+    
+    // If no active panel, return empty
+    if (!activePanelId) {
+      return res.json([]);
+    }
+
+    // Get active panel members with their roles
+    const result = await pool.request()
+      .input('PanelId', sql.Int, activePanelId)
+      .query(`
+        SELECT 
+          pm.CNIC,
+          pm.Role,
+          pm.InviteStatus,
+          ISNULL(u.FirstName, '') AS FirstName,
+          ISNULL(u.LastName, '') AS LastName,
+          ISNULL(u.Email, '') AS Email,
+          ISNULL(u.Phone, '') AS Phone
+        FROM PanelMembers pm
+        LEFT JOIN Users u ON pm.CNIC = u.CNIC
+        WHERE pm.PanelId = @PanelId AND pm.InviteStatus = 'accepted'
+        ORDER BY pm.Role
+      `);
+    
+    res.json(result.recordset || []);
+  } catch (err) {
+    console.error('Fetch active panel members error:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
 // create a new panel when user clicks self nomination
 app.post('/api/panels', async (req, res) => {
-  const { panelName, presidentCnic, nhcId, members, treasurerCnic, viceCnic, complaintId, description, isCommittee } = req.body;
+  const { panelName, presidentCnic, nhcId, members, treasurerCnic, viceCnic, complaintId, description, isCommittee, nominationId: requestedNominationId } = req.body;
   // members is an optional array [{ cnic, role }]; legacy fields treasurerCnic/viceCnic are still supported
   if (!presidentCnic || !nhcId) {
     return res.status(400).json({ error: 'presidentCnic and nhcId are required' });
@@ -4246,11 +4398,11 @@ app.post('/api/panels', async (req, res) => {
       // Ensure current date is within nomination window for election panels.
       const nomRes = await pool.request()
         .input('NHC_Id', sql.Int, nhcId)
-        .query('SELECT TOP 1 NominationStartDate, NominationEndDate FROM Nominations WHERE NHC_Id = @NHC_Id ORDER BY CreatedDate DESC');
+        .query('SELECT TOP 1 Id, NominationStartDate, NominationEndDate FROM Nominations WHERE NHC_Id = @NHC_Id ORDER BY CreatedDate DESC');
       if (nomRes.recordset.length === 0) {
         return res.status(400).json({ error: 'Nomination period not set for this NHC' });
       }
-      const { NominationStartDate, NominationEndDate } = nomRes.recordset[0];
+      const { Id: latestNominationId, NominationStartDate, NominationEndDate } = nomRes.recordset[0];
       const today = new Date();
       const todayStr = String(today.getFullYear()).padStart(4, '0') + '-' +
                        String(today.getMonth() + 1).padStart(2, '0') + '-' +
@@ -4273,6 +4425,21 @@ app.post('/api/panels', async (req, res) => {
       }
       if (todayStr < startStr || todayStr > endStr) {
         return res.status(400).json({ error: 'Nominations are not open today. Period: ' + startStr + ' to ' + endStr });
+      }
+
+      if (!requestedNominationId) {
+        req.body.nominationId = latestNominationId;
+      }
+    }
+
+    let nominationId = null;
+    if (!isCommittee) {
+      nominationId = requestedNominationId ? parseInt(requestedNominationId, 10) : null;
+      if (!nominationId) {
+        const latestNominationRes = await pool.request()
+          .input('NHC_Id', sql.Int, nhcId)
+          .query('SELECT TOP 1 Id FROM Nominations WHERE NHC_Id = @NHC_Id ORDER BY CreatedDate DESC');
+        nominationId = latestNominationRes.recordset.length > 0 ? latestNominationRes.recordset[0].Id : null;
       }
     }
 
@@ -4327,12 +4494,16 @@ app.post('/api/panels', async (req, res) => {
     // election panels require unique participation across panels; committees can reuse members
     if (!isCommittee) {
       const allCnics = Array.from(seenCnics);
-      let inQuery = 'SELECT DISTINCT CNIC FROM PanelMembers WHERE CNIC IN (' + allCnics.map((_,i) => `@ExC${i}`).join(',') + ')';
+      let inQuery = 'SELECT DISTINCT pm.CNIC FROM PanelMembers pm INNER JOIN Panels p ON p.Id = pm.PanelId WHERE pm.CNIC IN (' + allCnics.map((_,i) => `@ExC${i}`).join(',') + ')';
+      if (nominationId) {
+        inQuery += ' AND p.NominationId = @NominationId';
+      }
       const inReq = pool.request();
       allCnics.forEach((c,i) => inReq.input(`ExC${i}`, sql.NVarChar, c));
+      if (nominationId) inReq.input('NominationId', sql.Int, nominationId);
       const existing = await inReq.query(inQuery);
       if (existing.recordset.length > 0) {
-        return res.status(400).json({ error: 'One or more selected members are already part of a panel' });
+        return res.status(400).json({ error: 'One or more selected members are already part of a panel in this nomination cycle' });
       }
     }
 
@@ -4343,11 +4514,12 @@ app.post('/api/panels', async (req, res) => {
       .input('PanelName', sql.NVarChar, panelName || null)
       .input('PresidentCNIC', sql.NVarChar, presidentCnic)
       .input('NHC_Id', sql.Int, nhcId)
+      .input('NominationId', sql.Int, nominationId)
       .input('ComplaintId', sql.Int, parsedComplaintId)
       .input('Description', sql.NVarChar(sql.MAX), description || null)
       .input('IsCommittee', sql.Bit, isCommittee ? 1 : 0)
       .input('Status', sql.NVarChar, isCommittee ? 'active' : 'pending')
-      .query('INSERT INTO Panels (PanelName, PresidentCNIC, NHC_Id, ComplaintId, Description, IsCommittee, Status) VALUES (@PanelName, @PresidentCNIC, @NHC_Id, @ComplaintId, @Description, @IsCommittee, @Status); SELECT SCOPE_IDENTITY() as id');
+      .query('INSERT INTO Panels (PanelName, PresidentCNIC, NHC_Id, NominationId, ComplaintId, Description, IsCommittee, Status) VALUES (@PanelName, @PresidentCNIC, @NHC_Id, @NominationId, @ComplaintId, @Description, @IsCommittee, @Status); SELECT SCOPE_IDENTITY() as id');
 
     const panelId = insPanel.recordset[0].id;
 
@@ -4668,12 +4840,13 @@ app.post('/api/panels/:id/members/decline', async (req, res) => {
 app.get('/api/panels', async (req, res) => {
   const nhcId = req.query.nhcId ? parseInt(req.query.nhcId, 10) : null;
   const cnic = req.query.cnic || null;
+  const nominationId = req.query.nominationId ? parseInt(req.query.nominationId, 10) : null;
   const committeeOnly = String(req.query.committeeOnly || '').toLowerCase() === 'true';
   let pool;
   try {
     pool = await new sql.ConnectionPool(dbConfig).connect();
     await ensurePanelTablesExist(pool);
-    let query = `SELECT p.Id, p.PanelName, p.PresidentCNIC, p.NHC_Id, p.IsCommittee,
+    let query = `SELECT p.Id, p.PanelName, p.PresidentCNIC, p.NHC_Id, p.IsCommittee, p.NominationId,
         COALESCE(pc.ComplaintId, p.ComplaintId) AS ComplaintId,
         p.Description, p.Status, p.CreatedDate,
           c.Category AS ComplaintCategory, c.Status AS ComplaintStatus,
@@ -4717,6 +4890,10 @@ app.get('/api/panels', async (req, res) => {
     if (nhcId) {
       conditions.push('p.NHC_Id = @NHC_Id');
       inputs.push({ name: 'NHC_Id', type: sql.Int, value: nhcId });
+    }
+    if (nominationId) {
+      conditions.push('p.NominationId = @NominationId');
+      inputs.push({ name: 'NominationId', type: sql.Int, value: nominationId });
     }
     if (committeeOnly) {
       conditions.push('ISNULL(p.IsCommittee, 0) = 1');
@@ -4865,8 +5042,21 @@ app.get('/api/support-history', async (req, res) => {
   try {
     pool = await sql.connect(dbConfig);
     
+    // Get the LATEST (current) nomination for this NHC
+    const nomRes = await pool.request()
+      .input('NHC_Id', sql.Int, nhcId)
+      .query(`SELECT TOP 1 Id FROM Nominations WHERE NHC_Id = @NHC_Id ORDER BY CreatedDate DESC`);
+    
+    const latestNominationId = nomRes.recordset.length > 0 ? nomRes.recordset[0].Id : null;
+    
+    // If no nomination exists, return empty
+    if (!latestNominationId) {
+      return res.json([]);
+    }
+    
     const result = await pool.request()
       .input('NHC_Id', sql.Int, nhcId)
+      .input('NominationId', sql.Int, latestNominationId)
       .query(`
         SELECT 
           cs.Id as SupportId,
@@ -4891,7 +5081,9 @@ app.get('/api/support-history', async (req, res) => {
         LEFT JOIN Users cu ON c.CNIC = cu.CNIC
         LEFT JOIN Users su ON cs.SupporterCNIC = su.CNIC
         LEFT JOIN NHC_Zones nz ON cs.NHC_Id = nz.Id
-        WHERE cs.NHC_Id = @NHC_Id AND c.PanelId IS NOT NULL
+        WHERE cs.NHC_Id = @NHC_Id 
+          AND c.PanelId IS NOT NULL
+          AND c.NominationId = @NominationId
         ORDER BY cs.CreatedDate DESC
       `);
     

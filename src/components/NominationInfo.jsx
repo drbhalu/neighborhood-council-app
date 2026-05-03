@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getCandidates, supportCandidate, getNominations } from '../api';
+import { getCandidates, supportCandidate, getNominations, getSupportHistory } from '../api';
 
 const NominationInfo = ({ user, onBack }) => {
   const [candidates, setCandidates] = useState([]);
@@ -8,6 +8,8 @@ const NominationInfo = ({ user, onBack }) => {
   const [nominationOpen, setNominationOpen] = useState(false);
   const [nominationStartDate, setNominationStartDate] = useState(null);
   const [nominationEndDate, setNominationEndDate] = useState(null);
+  const [supportHistory, setSupportHistory] = useState([]);
+  const [showSupportList, setShowSupportList] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -47,6 +49,15 @@ const NominationInfo = ({ user, onBack }) => {
             setNominationOpen(false);
             setNominationStartDate(null);
             setNominationEndDate(null);
+          }
+
+          // Load support history for current nomination
+          try {
+            const supportData = await getSupportHistory(user.nhcId);
+            setSupportHistory(supportData || []);
+          } catch (err) {
+            console.error('Failed to load support history', err);
+            setSupportHistory([]);
           }
         } else {
           setCandidates([]);
@@ -263,7 +274,79 @@ const NominationInfo = ({ user, onBack }) => {
           </div>
         )}
 
-        {/* CLOSE BUTTON */}
+        {/* SUPPORT HISTORY SECTION TEMPORARILY DISABLED
+        {nominationOpen && supportHistory.length > 0 && (
+          <div style={{ marginTop: '30px', borderTop: '2px solid #e5e7eb', paddingTop: '20px' }}>
+            <button
+              onClick={() => setShowSupportList(!showSupportList)}
+              style={{
+                width: '100%',
+                padding: '12px 20px',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                marginBottom: '15px',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#2563eb';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#3b82f6';
+              }}
+            >
+              {showSupportList ? '▼ Hide Support List' : '▶ Show Support List'}
+            </button>
+
+            {showSupportList && (
+              <div style={{
+                backgroundColor: '#f3f4f6',
+                borderRadius: '8px',
+                padding: '20px',
+                maxHeight: '400px',
+                overflowY: 'auto'
+              }}>
+                <h3 style={{ margin: '0 0 15px 0', fontSize: '16px', color: '#1f2937' }}>
+                  👥 Support History - Current Nomination
+                </h3>
+                {supportHistory.map((support, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      backgroundColor: 'white',
+                      borderLeft: '4px solid #3b82f6',
+                      padding: '12px',
+                      marginBottom: '10px',
+                      borderRadius: '4px',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <div style={{ marginBottom: '5px' }}>
+                      <strong style={{ color: '#1f2937' }}>
+                        {support.SupporterFirstName} {support.SupporterLastName}
+                      </strong>
+                      <span style={{ color: '#6b7280', marginLeft: '10px' }}>
+                        ({support.SupporterCNIC})
+                      </span>
+                    </div>
+                    <div style={{ color: '#4b5563', marginBottom: '5px' }}>
+                      ➜ Supported: <strong>{support.CandidateFirstName} {support.CandidateLastName}</strong>
+                    </div>
+                    <div style={{ color: '#9ca3af', fontSize: '12px' }}>
+                      Category: {support.Category}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        */}
+
         <button
           onClick={onBack}
           style={{

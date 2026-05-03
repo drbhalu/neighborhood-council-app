@@ -11,6 +11,7 @@ const SelfNominationForm = ({ user, onBack }) => {
   const [nominationOpen, setNominationOpen] = useState(false);
   const [nominationStartDate, setNominationStartDate] = useState(null);
   const [nominationEndDate, setNominationEndDate] = useState(null);
+  const [currentNominationId, setCurrentNominationId] = useState(null);
   const [alreadyNominated, setAlreadyNominated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [availableMembers, setAvailableMembers] = useState([]);
@@ -67,7 +68,8 @@ const SelfNominationForm = ({ user, onBack }) => {
         panelName,
         presidentCnic: user.cnic,
         nhcId: user.nhcId,
-        members: assignments
+        members: assignments,
+        nominationId: currentNominationId
       });
       setSuccessMessage(`✅ Panel created and invitations sent! Waiting for members to accept; you will be redirected when the panel is approved.`);
       setAlreadyNominated(true);
@@ -144,15 +146,17 @@ const SelfNominationForm = ({ user, onBack }) => {
           setNominationOpen(isWithinRange);
           setNominationStartDate(record.NominationStartDate || record.NominationStart || null);
           setNominationEndDate(record.NominationEndDate || record.NominationEnd || null);
+          setCurrentNominationId(record.Id || null);
         } else {
           setNominationOpen(false);
           setNominationStartDate(null);
           setNominationEndDate(null);
+          setCurrentNominationId(null);
         }
 
-        // check if user is part of any panel already in this NHC
+        // check if user is part of any panel in this nomination cycle
         try {
-          const panels = await getPanels({ cnic: user.cnic, nhcId: user.nhcId });
+          const panels = await getPanels({ cnic: user.cnic, nhcId: user.nhcId, nominationId: record?.Id || null });
           setAlreadyNominated((panels || []).length > 0);
         } catch (pmErr) {
           console.error('Failed to check panels', pmErr);
@@ -183,9 +187,9 @@ const SelfNominationForm = ({ user, onBack }) => {
           setPositions([]);
         }
 
-        // load all existing panel members to filter them out from dropdown
+        // load all existing panel members from this nomination cycle to filter them out from dropdown
         try {
-          const allPanels = await getPanels({ nhcId: user.nhcId });
+          const allPanels = await getPanels({ nhcId: user.nhcId, nominationId: record?.Id || null });
           const panelCnics = new Set();
           for (const panel of (allPanels || [])) {
             try {

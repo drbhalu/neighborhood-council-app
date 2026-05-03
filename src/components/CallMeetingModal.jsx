@@ -30,7 +30,6 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
       console.error('❌ User CNIC is missing:', user);
       return;
     }
-
     setIsSubmitting(true);
     try {
       console.log('🔵 Scheduling meeting with data:', {
@@ -59,7 +58,6 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
       setIsSubmitting(false);
     }
   };
-
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
