@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getComplaintHistory, saveCommitteeMeetingDecision } from '../api';
+import { getComplaintHistory, saveCommitteeMeetingDecision, getComplaintsByUser } from '../api';
 
 const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPresidentReview = false, nhcCode }) => {
   const normalizeDecision = (value) => {
@@ -23,6 +23,9 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
+  const [filerHistory, setFilerHistory] = useState([]);
+  const [filerHistoryLoading, setFilerHistoryLoading] = useState(false);
+  const [filerHistoryError, setFilerHistoryError] = useState('');
   const isPresident = String(user?.role || '').toLowerCase() === 'president';
   const isPresidentFinalReview = isPresident && allowPresidentReview;
   const isReadOnlyView = (isPresident && !allowPresidentReview) || isPresidentFinalReview;
@@ -184,6 +187,26 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
     loadHistory();
   }, [complaintId, user?.cnic]);
 
+  useEffect(() => {
+    const loadFilerHistory = async () => {
+      const complainantCnic = committee?.ComplaintUserCNIC || committee?.UserCNIC;
+      const filerNhcCode = nhcCode || committee?.NHC_Code || committee?.NHCCode || committee?.nhcCode || null;
+      if (!complainantCnic) return;
+      try {
+        setFilerHistoryLoading(true);
+        setFilerHistoryError('');
+        const complaints = await getComplaintsByUser(complainantCnic, filerNhcCode);
+        setFilerHistory(complaints || []);
+      } catch (err) {
+        setFilerHistoryError(err.message || 'Failed to load filer history');
+        setFilerHistory([]);
+      } finally {
+        setFilerHistoryLoading(false);
+      }
+    };
+    loadFilerHistory();
+  }, [committee?.ComplaintUserCNIC, committee?.UserCNIC, committee?.NHC_Code, committee?.NHCCode, committee?.nhcCode, nhcCode]);
+
   const handleSave = async () => {
     if (isPresident && !allowPresidentReview) {
       alert('President can only view committee decisions.');
@@ -321,6 +344,63 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
           <strong>Status:</strong> {statusLabel}
         </p>
       </div>
+
+     {/*File Complaint Histry*/} 
+      {/*
+      <div style={{ marginTop: '14px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '18px' }}>
+        <h3 style={sectionTitleStyle}>Filer History</h3>
+        {filerHistoryLoading ? (
+          <p style={{ margin: 0, color: '#64748b' }}>Loading filer history...</p>
+        ) : filerHistoryError ? (
+          <p style={{ margin: 0, color: '#b91c1c' }}>{filerHistoryError}</p>
+        ) : filerHistory.length === 0 ? (
+          <p style={{ margin: 0, color: '#64748b' }}>No previous complaints from this filer.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {filerHistory.map((complaint) => (
+              <div
+                key={`filer-complaint-${complaint.Id}`}
+                style={{
+                  border: '1px solid #fde2e4',
+                  borderLeft: '4px solid #dc2626',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  backgroundColor: '#fef2f2',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '12px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
+                    {complaint.ComplaintType || 'Complaint'}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: complaint.Status === 'Resolved' ? '#dcfce7' : complaint.Status === 'Rejected' ? '#fee2e2' : '#fef3c7',
+                      color: complaint.Status === 'Resolved' ? '#065f46' : complaint.Status === 'Rejected' ? '#991b1b' : '#92400e',
+                    }}
+                  >
+                    {complaint.Status || 'Unknown'}
+                  </span>
+                </div>
+                <p style={{ margin: '4px 0', fontSize: '13px', color: '#374151', whiteSpace: 'pre-wrap' }}>
+                  <strong>Name:</strong> {complaint.Category || complaint.ComplaintType || 'Complaint'}
+                </p>
+                <p style={{ margin: '4px 0', fontSize: '13px', color: '#666', whiteSpace: 'pre-wrap' }}>
+                  <strong>Description:</strong> {complaint.Description || complaint.ComplaintDescription || 'No description provided.'}
+                </p>
+                <p style={{ margin: '4px 0', fontSize: '12px', color: '#64748b' }}>
+                  <strong>Filed:</strong> {complaint.CreatedDate ? new Date(complaint.CreatedDate).toLocaleDateString() : 'Unknown date'}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      */}
+     
 
       {/* COMMITTEE DECISION - HIGHLIGHTED FOR PRESIDENT REVIEW */}
       {isPresidentFinalReview && (

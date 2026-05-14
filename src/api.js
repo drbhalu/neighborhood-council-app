@@ -153,7 +153,54 @@ export const assignRequest = async (requestId, nhcCode) => {
   }
   return response.json();
 };
+// COUNCIL CHANGE REQUEST APIs
+export const submitCouncilChangeRequest = async (requestData) => {
+  const response = await fetch(`${API_URL}/council-change-request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestData)
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to submit council change request');
+  }
+  return response.json();
+};
 
+export const getCouncilChangeRequests = async () => {
+  const response = await fetch(`${API_URL}/council-change-requests`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to fetch council change requests');
+  }
+  return response.json();
+};
+
+export const approveCouncilChangeRequest = async (requestId, adminCnic) => {
+  const response = await fetch(`${API_URL}/council-change-request/${requestId}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ adminCnic })
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to approve council change request');
+  }
+  return response.json();
+};
+
+export const rejectCouncilChangeRequest = async (requestId, adminCnic, reason = '') => {
+  const response = await fetch(`${API_URL}/council-change-request/${requestId}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ adminCnic, reason })
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to reject council change request');
+  }
+  return response.json();
+};
 export const setNominationDate = async (nhcId, nominationStartDate, nominationEndDate) => {
   const payload = { nhcId, nominationStartDate, nominationEndDate };
   console.log("🔵 API: setNominationDate called with:", payload);

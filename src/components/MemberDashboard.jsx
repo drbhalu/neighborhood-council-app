@@ -20,7 +20,8 @@ import CommitteeMeetingScreen from './CommitteeMeetingScreen';
 import SuggestionsForm from './SuggestionsForm'; // NEW: Added Import
 import TreasurerBudgetManagement from './TreasurerBudgetManagement'; // NEW: Added Import
 import BudgetRequestForm from './BudgetRequestForm'; // Added Import
-import { updateUser, getComplaintsByNHC, getPanels, getUserRoleInNHC } from '../api';
+import ChangeCouncilRequest from './ChangeCouncilRequest'; // NEW: Council change
+import { updateUser, getComplaintsByNHC, getPanels, getUserRoleInNHC, submitCouncilChangeRequest } from '../api';
 import logo from '../assets/logo.png';
  
 const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }) => {
@@ -46,6 +47,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
   const [selectedCommitteeName, setSelectedCommitteeName] = useState('');
   const [showCallMeeting, setShowCallMeeting] = useState(false);
   const [selectedCommitteeForMeeting, setSelectedCommitteeForMeeting] = useState(null);
+  const [showCouncilChangeRequest, setShowCouncilChangeRequest] = useState(false); // NEW: Council change modal
 
   // Check if user has multiple NHCs
   const hasMultipleNHCs = user && user.nhcOptions && user.nhcOptions.length > 1;
@@ -224,24 +226,17 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
   };
 
 
-  const handleChangeCouncil = async () => {
-    const newCode = prompt("Enter New NHC Code (leave blank to cancel):");
-    if (newCode) {
-      try {
-        // combine with existing codes (comma-separated)
-        const existing = currentUser.nhcCode || '';
-        const parts = existing
-          .split(',')
-          .map(s => s.trim())
-          .filter(Boolean);
-        if (!parts.includes(newCode.trim())) {
-          parts.push(newCode.trim());
-        }
-        const updated = parts.join(', ');
-        await updateUser(currentUser.cnic, { ...currentUser, nhcCode: updated });
-        setCurrentUser({ ...currentUser, nhcCode: updated });
-        alert("Council list updated!");
-      } catch(e) { alert("Error updating council"); }
+  const handleChangeCouncil = () => {
+    setShowCouncilChangeRequest(true);
+  };
+
+  const handleCouncilChangeSubmit = async (requestData) => {
+    try {
+      await submitCouncilChangeRequest(requestData);
+      setShowCouncilChangeRequest(false);
+      alert('✓ Council change request submitted to admin for approval!');
+    } catch (err) {
+      throw err;
     }
   };
 
@@ -1057,6 +1052,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
             <CommitteeMeetingScreen
               committee={selectedCommittee}
               user={currentUser}
+              nhcCode={currentUser.nhcCode}
               onBack={() => setCommitteeView(committeeBackView)}
               onSaved={async () => {
                 await fetchMyCommittees();
@@ -1304,6 +1300,16 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
       <div style={{ marginTop: '30px', marginBottom: '30px', textAlign: 'center' }}>
         <button onClick={onLogout} className="logout-btn">Logout</button>
       </div>
+
+      {/* COUNCIL CHANGE REQUEST MODAL */}
+      {showCouncilChangeRequest && (
+        <ChangeCouncilRequest
+          user={currentUser}
+          currentNHC={currentUser.nhcCode}
+          onSubmit={handleCouncilChangeSubmit}
+          onCancel={() => setShowCouncilChangeRequest(false)}
+        />
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAllComplaints, getComplaintHistory } from '../api';
+import { getAllComplaints, getComplaintHistory, getComplaintsByUser } from '../api';
 
 const AdminComplaints = ({ user, onClose }) => {
   const [complaints, setComplaints] = useState([]);
@@ -8,6 +8,8 @@ const AdminComplaints = ({ user, onClose }) => {
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [filerComplaints, setFilerComplaints] = useState([]);
+  const [filerComplaintsLoading, setFilerComplaintsLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -41,6 +43,24 @@ const AdminComplaints = ({ user, onClose }) => {
     };
     loadHistory();
   }, [selectedComplaint?.Id, user?.cnic]);
+
+  useEffect(() => {
+    const loadFilerComplaints = async () => {
+      if (!selectedComplaint?.UserCNIC) return;
+      try {
+        setFilerComplaintsLoading(true);
+        const data = await getComplaintsByUser(selectedComplaint.UserCNIC, selectedComplaint.NHC_Code);
+        const priorComplaints = (data || []).filter((complaint) => complaint.Id !== selectedComplaint.Id);
+        setFilerComplaints(priorComplaints);
+      } catch (_) {
+        setFilerComplaints([]);
+      } finally {
+        setFilerComplaintsLoading(false);
+      }
+    };
+
+    loadFilerComplaints();
+  }, [selectedComplaint?.UserCNIC, selectedComplaint?.NHC_Code, selectedComplaint?.Id]);
 
   return (
     <div style={{
@@ -113,6 +133,34 @@ const AdminComplaints = ({ user, onClose }) => {
                 <a href={`http://localhost:3001${selectedComplaint.MeetingMinutesPath}`} target="_blank" rel="noreferrer">Open latest minutes PDF</a>
               </p>
             ) : null}
+
+            <h4 style={{ marginBottom: '8px' }}>Filer History</h4>
+            <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc' }}>
+              <div style={{ fontSize: '13px', color: '#334155', marginBottom: '8px' }}>
+                <strong>Filer:</strong> {selectedComplaint.UserName || selectedComplaint.UserCNIC || 'Unknown'}
+              </div>
+
+              {filerComplaintsLoading ? (
+                <div style={{ fontSize: '13px', color: '#64748b' }}>Loading filer history...</div>
+              ) : filerComplaints.length === 0 ? (
+                <div style={{ fontSize: '13px', color: '#166534' }}>No previous complaints found for this filer in this NHC.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '13px', color: '#92400e', fontWeight: 600 }}>
+                    This filer has {filerComplaints.length} previous complaint(s):
+                  </div>
+                  {filerComplaints.map((complaint) => (
+                    <div key={complaint.Id} style={{ border: '1px solid #dbeafe', borderRadius: '8px', padding: '8px', background: '#fff' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600 }}>#{complaint.Id} - {complaint.Category || 'Complaint'}</div>
+                      <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>{complaint.Description || 'No description'}</div>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                        Status: {complaint.Status || 'Pending'} | {complaint.CreatedDate ? new Date(complaint.CreatedDate).toLocaleDateString() : 'Unknown date'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <h4 style={{ marginBottom: '8px' }}>Update History</h4>
             {historyLoading ? (

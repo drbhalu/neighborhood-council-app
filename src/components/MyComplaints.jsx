@@ -71,25 +71,26 @@ const MyComplaints = ({ user, onClose }) => {
       position: 'fixed',
       top: 0,
       left: 0,
-      width: '100%',
-      height: '100%',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      width: '100vw',
+      height: '100vh',
+      backgroundColor: 'rgba(248, 250, 252, 0.98)',
       zIndex: 1000,
       display: 'flex',
       justifyContent: 'center',
-      alignItems: 'center',
-      padding: '20px',
+      alignItems: 'stretch',
+      padding: '0',
       overflowY: 'auto'
     }}>
       <div style={{
         backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '28px 24px',
+        borderRadius: '0',
+        padding: '32px 28px',
         width: '100%',
-        maxWidth: '760px',
-        maxHeight: '90vh',
+        maxWidth: 'none',
+        minHeight: '100vh',
+        maxHeight: '100vh',
         overflowY: 'auto',
-        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)'
+        boxShadow: 'none'
       }}>
         <div style={{
           display: 'flex',

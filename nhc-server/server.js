@@ -1,50 +1,76 @@
-const express = require('express');
-const sql = require('mssql');
-const cors = require('cors');
-const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
+// ==========================================
+// NEIGHBORHOOD HOUSING COUNCIL (NHC) BACKEND SERVER
+// ==========================================
+// This server handles all backend operations for the NHC web application
+// including user authentication, NHC management, elections, complaints,
+// committees, budgets, and file uploads.
 
+// Import required Node.js modules
+const express = require('express'); // Web framework for handling HTTP requests
+const sql = require('mssql'); // Microsoft SQL Server client for database operations
+const cors = require('cors'); // Cross-Origin Resource Sharing middleware
+const multer = require('multer'); // Middleware for handling file uploads
+const fs = require('fs'); // File system operations (create directories, etc.)
+const path = require('path'); // Path utilities for file/directory operations
+
+// Create Express application instance
 const app = express();
+
+// Enable CORS to allow frontend (running on different port) to make requests
 app.use(cors());
+
+// Parse incoming JSON request bodies
 app.use(express.json());
 
-const PROFILE_PICTURES_DIR = path.join(__dirname, 'profile-pictures');
-const COMPLAINT_PHOTOS_DIR = path.join(__dirname, 'complaint-photos');
-const MEETING_MINUTES_DIR = path.join(__dirname, 'meeting-minutes');
+// Define directories for storing uploaded files
+const PROFILE_PICTURES_DIR = path.join(__dirname, 'profile-pictures'); // User profile images
+const COMPLAINT_PHOTOS_DIR = path.join(__dirname, 'complaint-photos'); // Complaint evidence photos
+const MEETING_MINUTES_DIR = path.join(__dirname, 'meeting-minutes'); // Committee meeting documents
 
-// Ensure upload directories exist even if the server starts from a different CWD.
+// Ensure upload directories exist when server starts
+// This prevents errors if directories don't exist
 [PROFILE_PICTURES_DIR, COMPLAINT_PHOTOS_DIR, MEETING_MINUTES_DIR].forEach((dirPath) => {
   if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
+    fs.mkdirSync(dirPath, { recursive: true }); // Create directory and parent directories if needed
   }
 });
 
+// ==========================================
+// FILE UPLOAD CONFIGURATION
+// ==========================================
+
 // --- MULTER CONFIGURATION FOR PROFILE PICTURES ---
+// Configure how profile picture files are stored on disk
 const storage = multer.diskStorage({
+  // Set destination directory for uploaded files
   destination: function (req, file, cb) {
-    cb(null, PROFILE_PICTURES_DIR);
+    cb(null, PROFILE_PICTURES_DIR); // Save to profile-pictures directory
   },
+  // Generate unique filename to prevent conflicts
   filename: function (req, file, cb) {
+    // Format: timestamp-randomnumber.extension (e.g., 1640995200000-123456789.jpg)
     const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
     cb(null, uniqueName);
   }
 });
 
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+// Create multer instance for profile picture uploads
+const upload = multer({
+  storage: storage, // Use the disk storage configuration above
+  limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
+  // Validate file type - only allow image formats
   fileFilter: function (req, file, cb) {
     const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
+      cb(null, true); // Accept the file
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.')); // Reject the file
     }
   }
 });
 
-// Serve profile pictures as static files
+// Serve profile pictures as static files so frontend can access them via URLs
+// Example: http://localhost:3001/profile-pictures/1640995200000-123456789.jpg
 app.use('/profile-pictures', express.static(PROFILE_PICTURES_DIR));
 
 // --- MULTER CONFIGURATION FOR COMPLAINT PHOTOS ---
@@ -104,81 +130,105 @@ const meetingMinutesUpload = multer({
 // Serve meeting minutes as static files
 app.use('/meeting-minutes', express.static(MEETING_MINUTES_DIR));
 
-// --- CONFIGURATION ---
+// ==========================================
+// DATABASE CONFIGURATION
+// ==========================================
+
+// Microsoft SQL Server connection configuration
 const dbConfig = {
-  user: 'sa',
-  password: '12345',
-  server: 'DESKTOP-J53S96B\\SQLEXPRESS', 
-  database: 'NHC_DB',
+  user: 'sa', // SQL Server system administrator username
+  password: '12345', // Password for the sa user
+  server: 'DESKTOP-J53S96B\\SQLEXPRESS', // SQL Server instance name (local machine)
+  database: 'NHC_DB', // Database name to connect to
   options: {
-    encrypt: false, 
-    trustServerCertificate: true,
-    enableArithAbort: true
+    encrypt: false, // Disable encryption for local development
+    trustServerCertificate: true, // Trust self-signed certificates
+    enableArithAbort: true // Required for some SQL Server versions
   }
 };
 
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
 // --- HELPER FUNCTION: Convert relative profile image URLs to absolute URLs ---
+// Converts stored relative paths to full URLs that frontend can use
 function ensureFullProfileImageUrl(profileImage) {
-  if (!profileImage) return profileImage;
+  if (!profileImage) return profileImage; // Return null/undefined as-is
   if (profileImage.startsWith('http://') || profileImage.startsWith('https://')) {
     return profileImage; // Already a full URL
   }
+  // Convert relative path to full URL: /profile-pictures/filename.jpg → http://localhost:3001/profile-pictures/filename.jpg
   return `http://localhost:3001${profileImage}`;
 }
 
-// --- GLOBAL ERROR HANDLING ------------------------------------------------
+// ==========================================
+// ERROR HANDLING
+// ==========================================
+
+// Global error handlers for uncaught exceptions and unhandled promise rejections
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
-});
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled rejection at', promise, 'reason:', reason);
+  console.error('Uncaught exception:', err); // Log critical errors
 });
 
-// --- INIT DB ---
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled rejection at', promise, 'reason:', reason); // Log unhandled promises
+});
+
+// ==========================================
+// DATABASE INITIALIZATION
+// ==========================================
+
+// Initialize database tables and schema when server starts
 async function initDB() {
   try {
     console.log("--- Step 1: Connecting to Master ---");
+    // First connect to 'master' database to create our application database if it doesn't exist
     const masterPool = new sql.ConnectionPool({ ...dbConfig, database: 'master' });
     await masterPool.connect();
     console.log("✓ Connected to Master successfully.");
 
+    // Create the NHC_DB database if it doesn't exist
     await masterPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'NHC_DB')
       CREATE DATABASE NHC_DB
     `);
     console.log("✓ Database NHC_DB created/checked.");
 
-    await masterPool.close();
+    await masterPool.close(); // Close master connection
 
     console.log("--- Step 2: Connecting to NHC_DB ---");
+    // Now connect to our application database
     const nhcPool = new sql.ConnectionPool(dbConfig);
     await nhcPool.connect();
     console.log("✓ Connected to NHC_DB successfully.");
 
-    // Create Table Users
+    // ==========================================
+    // TABLE CREATION SECTION
+    // ==========================================
+
+    // Create Users table to store user account information
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Users' AND xtype='U')
       CREATE TABLE Users (
-        Id INT IDENTITY(1,1) PRIMARY KEY,
-        FirstName NVARCHAR(50),
-        LastName NVARCHAR(50),
-        Gender NVARCHAR(10),
-        CNIC NVARCHAR(20) UNIQUE,
-        Phone NVARCHAR(20),
-        Address NVARCHAR(200),
-        Email NVARCHAR(100),
-        Password NVARCHAR(100),
-        NHC_Code NVARCHAR(100),
-        ProfileImage NVARCHAR(MAX),
-        CreatedDate DATETIME DEFAULT GETDATE(),
-        Role NVARCHAR(20) DEFAULT 'User'
+        Id INT IDENTITY(1,1) PRIMARY KEY,        -- Auto-incrementing unique ID
+        FirstName NVARCHAR(50),                   -- User's first name
+        LastName NVARCHAR(50),                    -- User's last name
+        Gender NVARCHAR(10),                      -- Gender (Male/Female/Other)
+        CNIC NVARCHAR(20) UNIQUE,                 -- Computerized National Identity Card (unique identifier)
+        Phone NVARCHAR(20),                       -- Phone number
+        Address NVARCHAR(200),                    -- Residential address
+        Email NVARCHAR(100),                      -- Email address
+        Password NVARCHAR(100),                   -- Password (should be hashed in production)
+        ProfileImage NVARCHAR(MAX),               -- Path to profile picture file
+        CreatedDate DATETIME DEFAULT GETDATE(),   -- Account creation timestamp
+        Role NVARCHAR(20) DEFAULT 'User'          -- User role (Admin/User/President/etc.)
       )
     `);
     console.log("✓ Table Users ready.");
 
-    // Legacy support: column will be dropped after migration below.
-    // Only create the column if the mapping table doesn't yet exist – once we
-    // have UserNHCs we no longer need to add this field.
+    // Legacy support: This column was used for single NHC membership
+    // Will be migrated to UserNHCs mapping table and then dropped
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='UserNHCs' AND xtype='U')
       BEGIN
@@ -187,41 +237,57 @@ async function initDB() {
       END
     `);
 
-    // Committee size configuration so the frontend can adapt dynamically.
+    // ==========================================
+    // CONFIGURATION TABLES
+    // ==========================================
+
+    // Committee size configuration - determines how many members per committee
+    // Frontend uses this to adapt UI (e.g., show 3 member slots)
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CommitteeSettings' AND xtype='U')
       CREATE TABLE CommitteeSettings (
-        SettingKey NVARCHAR(100) PRIMARY KEY,
-        SettingValue INT NOT NULL,
-        UpdatedDate DATETIME DEFAULT GETDATE()
+        SettingKey NVARCHAR(100) PRIMARY KEY,    -- Setting name (e.g., 'CommitteeMemberCount')
+        SettingValue INT NOT NULL,               -- Setting value (e.g., 3)
+        UpdatedDate DATETIME DEFAULT GETDATE()   -- Last update timestamp
       )
     `);
+    // Insert default committee size if not exists
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT 1 FROM CommitteeSettings WHERE SettingKey = 'CommitteeMemberCount')
       INSERT INTO CommitteeSettings (SettingKey, SettingValue) VALUES ('CommitteeMemberCount', 3)
     `);
     console.log('✓ Table CommitteeSettings ready.');
 
-    // --- NEW: Create NHC budget table for available budget entries ---
+    // ==========================================
+    // BUDGET MANAGEMENT TABLES
+    // ==========================================
+
+    // Budget tracking table for each NHC's available funds
+    // Treasurers can allocate budget to complaints and track spending
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='NHCBudgets' AND xtype='U')
       CREATE TABLE NHCBudgets (
         Id INT IDENTITY(1,1) PRIMARY KEY,
-        NHC_Code NVARCHAR(100) NOT NULL,
-        AvailableBudget DECIMAL(18,2) DEFAULT 0,
-        UpdatedDate DATETIME DEFAULT GETDATE(),
-        CONSTRAINT UQ_NHCBudgets_NHC_Code UNIQUE (NHC_Code)
+        NHC_Code NVARCHAR(100) NOT NULL,          -- Which NHC this budget belongs to
+        AvailableBudget DECIMAL(18,2) DEFAULT 0,  -- Current available budget amount
+        UpdatedDate DATETIME DEFAULT GETDATE(),   -- Last update timestamp
+        CONSTRAINT UQ_NHCBudgets_NHC_Code UNIQUE (NHC_Code)  -- One budget per NHC
       )
     `);
     console.log('✓ Table NHCBudgets ready.');
 
-    // Add ProfileImage column if missing
+    // ==========================================
+    // DATABASE SCHEMA UPGRADES
+    // ==========================================
+
+    // Add ProfileImage column if missing (for database upgrades)
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'ProfileImage' AND Object_ID = OBJECT_ID('Users'))
       ALTER TABLE Users ADD ProfileImage NVARCHAR(MAX);
     `);
 
-    // Clean up any base64 data in ProfileImage (keep only file paths)
+    // Clean up any old base64 encoded images (should use file paths now)
+    // Base64 images were stored directly in DB but now we use file system
     await nhcPool.request().query(`
       UPDATE Users 
       SET ProfileImage = NULL 
@@ -229,24 +295,35 @@ async function initDB() {
     `);
     console.log("✓ Cleaned up base64 data from ProfileImage column.");
 
-    // Add Location column if missing
+    // Add Location column for geographic data (latitude/longitude)
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'Location' AND Object_ID = OBJECT_ID('Users'))
       ALTER TABLE Users ADD Location NVARCHAR(MAX);
     `);
 
-    // --- NEW: CREATE NOTIFICATIONS TABLE ---
+    // ==========================================
+    // NOTIFICATIONS SYSTEM
+    // ==========================================
+
+    // Notifications table for sending messages to users
+    // Used for committee invitations, election announcements, complaint updates
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Notifications' AND xtype='U')
       CREATE TABLE Notifications (
         Id INT IDENTITY(1,1) PRIMARY KEY,
-        RecipientCNIC NVARCHAR(20),
-        Message NVARCHAR(MAX),
-        PanelId INT NULL,
-        Role NVARCHAR(50) NULL,
-        CreatedDate DATETIME DEFAULT GETDATE()
+        RecipientCNIC NVARCHAR(20),               -- Who receives the notification (CNIC)
+        Message NVARCHAR(MAX),                    -- Notification content/text
+        PanelId INT NULL,                         -- Related committee panel ID (for invitations)
+        Role NVARCHAR(50) NULL,                   -- Target user role (filter notifications)
+        CreatedDate DATETIME DEFAULT GETDATE(),   -- When notification was created
+        NHC_Code NVARCHAR(100) NULL,              -- Related NHC (for filtering)
+        NotificationType NVARCHAR(50) NULL,       -- Type: 'invitation', 'announcement', etc.
+        RelatedComplaintId INT NULL,              -- Link to specific complaint
+        RelatedElectionId INT NULL,               -- Link to specific election
+        RelatedMeetingId INT NULL                 -- Link to specific meeting
       )
     `);
+    console.log("✓ Table Notifications ready.");
     // add PanelId column if missing (for invitations)
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'PanelId' AND Object_ID = OBJECT_ID('Notifications'))
@@ -281,23 +358,29 @@ async function initDB() {
     `);
     console.log("✓ Table Notifications ready.");
 
-    // --- NEW: CREATE POSITIONS TABLE ---
+    // ==========================================
+    // POSITIONS AND ELECTIONS SYSTEM
+    // ==========================================
+
+    // Available positions in NHC (President, Treasurer, Vice President)
+    // Members can nominate themselves for these positions during elections
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Positions' AND xtype='U')
       CREATE TABLE Positions (
         Id INT IDENTITY(1,1) PRIMARY KEY,
-        Name NVARCHAR(100) UNIQUE,
-        CreatedDate DATETIME DEFAULT GETDATE()
+        Name NVARCHAR(100) UNIQUE,                -- Position name (must be unique)
+        CreatedDate DATETIME DEFAULT GETDATE()    -- When position was created
       )
     `);
 
-    // Seed default positions if table is empty (President, Treasurer, Vice President)
+    // Seed default positions if table is empty
+    // These are the standard positions in every NHC
     await nhcPool.request().query(`
       IF NOT EXISTS (SELECT 1 FROM Positions)
       BEGIN
-        INSERT INTO Positions (Name) VALUES ('President');
-        INSERT INTO Positions (Name) VALUES ('Treasurer');
-        INSERT INTO Positions (Name) VALUES ('Vice President');
+        INSERT INTO Positions (Name) VALUES ('President');      -- NHC President
+        INSERT INTO Positions (Name) VALUES ('Treasurer');      -- NHC Treasurer
+        INSERT INTO Positions (Name) VALUES ('Vice President'); -- NHC Vice President
       END
     `);
     console.log("✓ Table Positions ready and seeded.");
@@ -933,6 +1016,26 @@ async function initDB() {
     `);
     console.log("✓ Table PanelComplaintHistory created.");
 
+    // === COUNCIL CHANGE REQUEST TABLE ===
+    await nhcPool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CouncilChangeRequests' AND xtype='U')
+      CREATE TABLE CouncilChangeRequests (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        UserCNIC NVARCHAR(20) NOT NULL,
+        FirstName NVARCHAR(50),
+        LastName NVARCHAR(50),
+        CurrentNHC NVARCHAR(100) NOT NULL,
+        RequestedNHC NVARCHAR(100) NOT NULL,
+        Reason NVARCHAR(MAX),
+        Status NVARCHAR(50) DEFAULT 'pending',
+        ReviewedByCNIC NVARCHAR(20) NULL,
+        ReviewReason NVARCHAR(MAX) NULL,
+        ReviewedDate DATETIME NULL,
+        CreatedDate DATETIME DEFAULT GETDATE()
+      )
+    `);
+    console.log("✓ Table CouncilChangeRequests created.");
+
     console.log("✓ All tables initialized successfully.");
     await nhcPool.close();
 
@@ -961,26 +1064,33 @@ async function ensureSuggestionsTableExists(pool) {
 
 // --- ROUTES ---
 
-// root health check / informational
+// Root endpoint - health check and server status
 app.get('/', (req, res) => {
   res.send('NHC server is running');
 });
 
-// 1. GET NHC Zones
+// 1. GET NHC ZONES
+// Returns all Neighborhood Housing Council zones with their geographic boundaries
 app.get('/api/nhc', async (req, res) => {
   console.log("GET /api/nhc called...");
   try {
     let pool = await sql.connect(dbConfig);
+    // Fetch all NHC zones from database
     let result = await pool.request().query("SELECT * FROM NHC_Zones");
-    const zones = result.recordset.map(z => ({ 
-        id: z.Id, 
-        name: z.Name, 
-        points: JSON.parse(z.ZoneData) 
+
+    // Transform database records to API response format
+    const zones = result.recordset.map(z => ({
+        id: z.Id, // Database ID
+        name: z.Name, // NHC name
+        points: JSON.parse(z.ZoneData) // Parse stored JSON string back to coordinate array
     }));
-    res.json(zones);
+
+    res.json(zones); // Return array of NHC zone objects
   } catch (err) {
-    console.error("❌ GET Error:", err);
+    console.error("❌ GET NHC Error:", err);
     res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
   }
 });
 
@@ -1610,42 +1720,52 @@ app.get('/api/election-results/:nhcId', async (req, res) => {
 });
 
 // 3. SIGN UP USER
+// Creates a new user account in the system
 app.post('/api/signup', async (req, res) => {
   console.log("POST /api/signup called...");
+  // Extract user data from request body
   const { firstName, lastName, gender, cnic, phone, address, location, email, password, nhcCode, profileImage } = req.body;
+
   let pool;
   try {
     pool = await sql.connect(dbConfig);
+
+    // Insert new user into Users table using parameterized query for security
     const result = await pool.request()
       .input('FirstName', sql.NVarChar, firstName)
       .input('LastName', sql.NVarChar, lastName)
       .input('Gender', sql.NVarChar, gender)
-      .input('CNIC', sql.NVarChar, cnic)
+      .input('CNIC', sql.NVarChar, cnic) // Unique identifier
       .input('Phone', sql.NVarChar, phone)
       .input('Address', sql.NVarChar, address)
-      .input('Location', sql.NVarChar(sql.MAX), location)
+      .input('Location', sql.NVarChar(sql.MAX), location) // Geographic location data
       .input('Email', sql.NVarChar, email)
-      .input('Password', sql.NVarChar, password)
-      .input('ProfileImage', sql.NVarChar(sql.MAX), profileImage)
+      .input('Password', sql.NVarChar, password) // Should be hashed in production
+      .input('ProfileImage', sql.NVarChar(sql.MAX), profileImage) // Path to uploaded image
+      // Insert user data and return the auto-generated ID
       .query("INSERT INTO Users (FirstName, LastName, Gender, CNIC, Phone, Address, Location, Email, Password, ProfileImage) VALUES (@FirstName, @LastName, @Gender, @CNIC, @Phone, @Address, @Location, @Email, @Password, @ProfileImage); SELECT SCOPE_IDENTITY() as id");
-    const id = result.recordset[0].id;
 
-    // add mapping record if NHC was detected during signup
+    const id = result.recordset[0].id; // Get the new user's ID
+
+    // If user specified an NHC during signup, create membership mapping
     if (nhcCode) {
+      // Handle multiple NHCs (comma-separated)
       const codes = nhcCode.split(',').map(s => s.trim()).filter(Boolean);
       for (const code of codes) {
         try {
+          // Insert into UserNHCs mapping table
           await pool.request()
             .input('UserCNIC', sql.NVarChar, cnic)
             .input('NHC_Code', sql.NVarChar, code)
-            .input('Role', sql.NVarChar, 'Member')
+            .input('Role', sql.NVarChar, 'Member') // Default role for new members
             .query('INSERT INTO UserNHCs (UserCNIC, NHC_Code, Role) VALUES (@UserCNIC, @NHC_Code, @Role)');
         } catch(e) {
-          // ignore duplicates
+          // Ignore duplicate key errors (user might already be mapped to this NHC)
         }
       }
     }
 
+    // Return success response with new user ID
     res.status(201).json({ message: "User Registered", id: id });
   } catch (err) {
     console.error("❌ Signup Error:", err);
@@ -1657,67 +1777,74 @@ app.post('/api/signup', async (req, res) => {
 });
 
 // 4. LOGIN USER
+// Authenticates user credentials and returns user data with NHC memberships
 app.post('/api/login', async (req, res) => {
   console.log("POST /api/login called...");
-  const { cnic, password } = req.body;
+  const { cnic, password } = req.body; // Get login credentials
+
   let pool;
   try {
     pool = await sql.connect(dbConfig);
+
+    // Query Users table to verify credentials
     let result = await pool.request()
       .input('CNIC', sql.NVarChar, cnic)
       .input('Password', sql.NVarChar, password)
       .query("SELECT * FROM Users WHERE CNIC = @CNIC AND Password = @Password");
-      
+
     if (result.recordset.length > 0) {
-      const user = result.recordset[0];
-      
-      // fetch multiple codes from mapping table first
+      const user = result.recordset[0]; // User found and authenticated
+
+      // Fetch all NHC codes this user belongs to from the mapping table
       let codes = [];
       try {
         const cRes = await pool.request()
           .input('CNIC', sql.NVarChar, user.CNIC)
           .query('SELECT NHC_Code FROM UserNHCs WHERE UserCNIC = @CNIC');
+        // Extract NHC codes and filter out invalid entries
         codes = cRes.recordset
           .map(r => r.NHC_Code)
-          .filter(code => code && code.trim() && code !== 'No NHC Found');  // Filter out null, empty, and "No NHC Found"
+          .filter(code => code && code.trim() && code !== 'No NHC Found');
       } catch(e) {
-        console.error('Error fetching codes for', user.CNIC, e);
+        console.error('Error fetching NHC codes for', user.CNIC, e);
       }
 
-      // Get NHC_Id from first mapped code if any
+      // Get the database ID of the first NHC (used for relationships)
       let nhcId = null;
       if (codes && codes.length > 0) {
         try {
           const nhcResult = await pool.request()
-            .input('Name', sql.NVarChar, codes[0])
+            .input('Name', sql.NVarChar, codes[0]) // Use first NHC code
             .query("SELECT Id FROM NHC_Zones WHERE Name = @Name");
           if (nhcResult.recordset.length > 0) {
             nhcId = nhcResult.recordset[0].Id;
           }
         } catch(e) {
-          console.error('lookup nhcId failed:', e);
+          console.error('Failed to lookup NHC ID:', e);
         }
       }
 
-      res.status(200).json({ 
-        message: "Login Successful", 
-        role: user.Role,
+      // Return successful login response with user data
+      res.status(200).json({
+        message: "Login Successful",
+        role: user.Role, // User role (Admin, President, Member, etc.)
         firstName: user.FirstName,
         lastName: user.LastName,
         cnic: user.CNIC,
-        nhcCode: codes.length > 0 ? codes[0] : null,
-        nhcCodes: codes,
-        nhcId: nhcId,
+        nhcCode: codes.length > 0 ? codes[0] : null, // Primary NHC code
+        nhcCodes: codes, // Array of all NHC codes user belongs to
+        nhcId: nhcId, // Database ID of primary NHC
         address: user.Address,
-        profileImage: ensureFullProfileImageUrl(user.ProfileImage)
+        profileImage: ensureFullProfileImageUrl(user.ProfileImage) // Convert to full URL
       });
     } else {
+      // Authentication failed
       res.status(401).json({ error: "Invalid CNIC or Password" });
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
   } finally {
-    if (pool) await pool.close();
+    if (pool) await pool.close(); // Always close database connection
   }
 });
 
@@ -2139,8 +2266,36 @@ app.get('/api/requests', async (req, res) => {
   let pool;
   try {
     pool = await sql.connect(dbConfig);
-    const result = await pool.request().query("SELECT * FROM Requests ORDER BY CreatedDate DESC");
-    res.json(result.recordset);
+    const result = await pool.request().query(`
+      SELECT
+        Id,
+        FirstName,
+        LastName,
+        CNIC,
+        RequestType,
+        Message,
+        Location,
+        Status,
+        CreatedDate
+      FROM Requests
+
+      UNION ALL
+
+      SELECT
+        -Id AS Id,
+        FirstName,
+        LastName,
+        UserCNIC AS CNIC,
+        'Change Council' AS RequestType,
+        CONCAT('Current NHC: ', CurrentNHC, ' | Requested NHC: ', RequestedNHC, ' | Reason: ', ISNULL(Reason, '')) AS Message,
+        NULL AS Location,
+        CASE WHEN LOWER(LTRIM(RTRIM(Status))) = 'pending' THEN 'Pending' ELSE Status END AS Status,
+        CreatedDate
+      FROM CouncilChangeRequests
+
+      ORDER BY CreatedDate DESC
+    `);
+    res.json(result.recordset || []);
   } catch (err) {
     res.status(500).json({ error: err.message });
   } finally {
@@ -2367,7 +2522,7 @@ app.get('/api/complaints/:userCnic', async (req, res) => {
   try {
     const { userCnic } = req.params;
     const nhcCode = req.query.nhcCode ? String(req.query.nhcCode).trim() : null;
-    pool = await sql.connect(dbConfig);
+    pool = await new sql.ConnectionPool(dbConfig).connect();
     
     let query = 'SELECT * FROM Complaints WHERE UserCNIC = @UserCNIC';
     const reqSql = pool.request().input('UserCNIC', sql.NVarChar, userCnic);
@@ -2426,7 +2581,7 @@ app.get('/api/complaints/:id/history', async (req, res) => {
       return res.status(400).json({ error: 'actorCnic is required' });
     }
 
-    pool = await sql.connect(dbConfig);
+    pool = await new sql.ConnectionPool(dbConfig).connect();
 
     const actorRes = await pool.request()
       .input('CNIC', sql.NVarChar, actorCnic)
@@ -3821,30 +3976,340 @@ app.put('/api/suggestions/:id/status', async (req, res) => {
   }
 });
 
-const PORT = 3001;
+// === COUNCIL CHANGE REQUEST ENDPOINTS ===
 
-// start everything in async wrapper so we can await DB initialization
+// POST: Submit Council Change Request
+app.post('/api/council-change-request', async (req, res) => {
+  console.log("POST /api/council-change-request called...");
+  const { cnic, firstName, lastName, currentNHC, requestedNHC, reason, requestType } = req.body;
+  let pool;
+  try {
+    if (!cnic || !currentNHC || !requestedNHC) {
+      return res.status(400).json({ error: 'Missing required fields: cnic, currentNHC, requestedNHC' });
+    }
+
+    pool = await sql.connect(dbConfig);
+
+    // Verify user exists
+    const userRes = await pool.request()
+      .input('CNIC', sql.NVarChar, cnic)
+      .query('SELECT FirstName, LastName FROM Users WHERE CNIC = @CNIC');
+
+    if (userRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userRes.recordset[0];
+    const finalFirstName = firstName || user.FirstName || '';
+    const finalLastName = lastName || user.LastName || '';
+
+    // Insert council change request
+    const result = await pool.request()
+      .input('UserCNIC', sql.NVarChar, cnic)
+      .input('FirstName', sql.NVarChar, finalFirstName)
+      .input('LastName', sql.NVarChar, finalLastName)
+      .input('CurrentNHC', sql.NVarChar, currentNHC)
+      .input('RequestedNHC', sql.NVarChar, requestedNHC)
+      .input('Reason', sql.NVarChar(sql.MAX), reason || '')
+      .query(`
+        INSERT INTO CouncilChangeRequests (UserCNIC, FirstName, LastName, CurrentNHC, RequestedNHC, Reason, Status)
+        VALUES (@UserCNIC, @FirstName, @LastName, @CurrentNHC, @RequestedNHC, @Reason, 'pending');
+        SELECT SCOPE_IDENTITY() as id;
+      `);
+
+    const requestId = result.recordset[0].id;
+    console.log("✓ Council change request created with ID:", requestId, "from:", cnic, "to:", requestedNHC);
+
+    // Notify admins about the new request
+    let adminsNotified = 0;
+    try {
+      console.log("🔍 Looking for admins with role = 'admin'");
+      const adminRes = await pool.request().query(`
+        SELECT DISTINCT u.CNIC, u.Email, u.Role
+        FROM Users u
+        WHERE LOWER(LTRIM(RTRIM(u.Role))) = 'admin'
+      `);
+
+      console.log(`📢 Found ${adminRes.recordset.length} admins`);
+
+      for (const admin of adminRes.recordset) {
+        try {
+          await pool.request()
+            .input('RecipientCNIC', sql.NVarChar, admin.CNIC)
+            .input('Message', sql.NVarChar(sql.MAX), `Council change request from ${finalFirstName} ${finalLastName}: ${currentNHC} → ${requestedNHC}`)
+            .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
+          console.log(`✓ Notification sent to admin ${admin.CNIC}`);
+          adminsNotified++;
+        } catch (notifyErr) {
+          console.error('❌ Failed to notify admin:', admin.CNIC, notifyErr);
+        }
+      }
+    } catch (adminErr) {
+      console.error('❌ Failed to query admins:', adminErr);
+    }
+
+    // Fallback: Also notify presidents of the current NHC
+    let presidentsNotified = 0;
+    try {
+      console.log("🔍 Looking for presidents in NHC:", currentNHC);
+      const presRes = await pool.request()
+        .input('NHC_Code', sql.NVarChar, currentNHC)
+        .query(`
+          SELECT DISTINCT u.CNIC
+          FROM Users u
+          INNER JOIN UserNHCs m ON m.UserCNIC = u.CNIC
+          WHERE LOWER(LTRIM(RTRIM(m.NHC_Code))) = LOWER(LTRIM(RTRIM(@NHC_Code)))
+            AND LOWER(LTRIM(RTRIM(u.Role))) = 'president'
+        `);
+
+      console.log(`📢 Found ${presRes.recordset.length} presidents in NHC`);
+
+      for (const pres of presRes.recordset) {
+        try {
+          await pool.request()
+            .input('RecipientCNIC', sql.NVarChar, pres.CNIC)
+            .input('Message', sql.NVarChar(sql.MAX), `Council change request from ${finalFirstName} ${finalLastName}: ${currentNHC} → ${requestedNHC}`)
+            .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
+          console.log(`✓ Notification sent to president ${pres.CNIC}`);
+          presidentsNotified++;
+        } catch (notifyErr) {
+          console.error('❌ Failed to notify president:', pres.CNIC, notifyErr);
+        }
+      }
+    } catch (presErr) {
+      console.error('❌ Failed to query presidents:', presErr);
+    }
+
+    console.log(`✓ Council change request ${requestId} notifications: ${adminsNotified} admins, ${presidentsNotified} presidents`);
+    res.status(201).json({ 
+      message: "Council change request submitted successfully",
+      id: requestId,
+      notificationsCount: {
+        admins: adminsNotified,
+        presidents: presidentsNotified
+      }
+    });
+  } catch (err) {
+    console.error("❌ Error submitting council change request:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
+// GET: Admin retrieves pending council change requests
+app.get('/api/council-change-requests', async (req, res) => {
+  console.log("GET /api/council-change-requests called...");
+  let pool;
+  try {
+    pool = await sql.connect(dbConfig);
+
+    const result = await pool.request().query(`
+      SELECT *
+      FROM CouncilChangeRequests
+      WHERE Status = 'pending'
+      ORDER BY CreatedDate DESC
+    `);
+
+    console.log("✓ Fetched", result.recordset.length, "pending council change requests");
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("❌ Error fetching council change requests:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
+// POST: Approve Council Change Request and update user's NHC
+app.post('/api/council-change-request/:id/approve', async (req, res) => {
+  console.log("POST /api/council-change-request/:id/approve called...");
+  const requestId = parseInt(req.params.id, 10);
+  const { adminCnic } = req.body;
+
+  if (!requestId || !adminCnic) {
+    return res.status(400).json({ error: 'requestId and adminCnic are required' });
+  }
+
+  let pool;
+  try {
+    pool = await sql.connect(dbConfig);
+
+    // Get the pending request
+    const reqRes = await pool.request()
+      .input('Id', sql.Int, requestId)
+      .query('SELECT * FROM CouncilChangeRequests WHERE Id = @Id AND Status = \'pending\'');
+
+    if (reqRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'Request not found or already processed' });
+    }
+
+    const changeReq = reqRes.recordset[0];
+    const userCnic = changeReq.UserCNIC;
+    const requestedNHC = changeReq.RequestedNHC;
+
+    // Update user's mapping: remove old NHC, add new NHC
+    try {
+      // Delete old mapping
+      await pool.request()
+        .input('UserCNIC', sql.NVarChar, userCnic)
+        .input('CurrentNHC', sql.NVarChar, changeReq.CurrentNHC)
+        .query(`
+          DELETE FROM UserNHCs 
+          WHERE UserCNIC = @UserCNIC 
+          AND NHC_Code = @CurrentNHC
+        `);
+    } catch (delErr) {
+      console.error('Warning: Failed to delete old NHC mapping:', delErr);
+    }
+
+    // Add new mapping
+    try {
+      await pool.request()
+        .input('UserCNIC', sql.NVarChar, userCnic)
+        .input('RequestedNHC', sql.NVarChar, requestedNHC)
+        .input('Role', sql.NVarChar, 'Member')
+        .query(`
+          INSERT INTO UserNHCs (UserCNIC, NHC_Code, Role)
+          VALUES (@UserCNIC, @RequestedNHC, @Role)
+        `);
+    } catch (addErr) {
+      if (addErr.number !== 2627) { // Ignore duplicate key error
+        throw addErr;
+      }
+    }
+
+    // Update request status to approved
+    await pool.request()
+      .input('Id', sql.Int, requestId)
+      .input('AdminCnic', sql.NVarChar, adminCnic)
+      .query(`
+        UPDATE CouncilChangeRequests
+        SET Status = 'approved', ReviewedByCNIC = @AdminCnic, ReviewedDate = GETDATE()
+        WHERE Id = @Id
+      `);
+
+    // Notify user about approval
+    try {
+      await pool.request()
+        .input('RecipientCNIC', sql.NVarChar, userCnic)
+        .input('Message', sql.NVarChar(sql.MAX), `Your council change request has been approved. You are now a member of ${requestedNHC}.`)
+        .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
+    } catch (notifyErr) {
+      console.error('Failed to notify user about approval:', notifyErr);
+    }
+
+    console.log("✓ Council change request approved:", requestId);
+    res.json({ 
+      message: "Council change request approved successfully",
+      userCnic: userCnic,
+      newNHC: requestedNHC
+    });
+  } catch (err) {
+    console.error("❌ Error approving council change request:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
+// POST: Reject Council Change Request
+app.post('/api/council-change-request/:id/reject', async (req, res) => {
+  console.log("POST /api/council-change-request/:id/reject called...");
+  const requestId = parseInt(req.params.id, 10);
+  const { adminCnic, reason } = req.body;
+
+  if (!requestId || !adminCnic) {
+    return res.status(400).json({ error: 'requestId and adminCnic are required' });
+  }
+
+  let pool;
+  try {
+    pool = await sql.connect(dbConfig);
+
+    // Get the pending request
+    const reqRes = await pool.request()
+      .input('Id', sql.Int, requestId)
+      .query('SELECT * FROM CouncilChangeRequests WHERE Id = @Id AND Status = \'pending\'');
+
+    if (reqRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'Request not found or already processed' });
+    }
+
+    const changeReq = reqRes.recordset[0];
+    const userCnic = changeReq.UserCNIC;
+
+    // Update request status to rejected
+    await pool.request()
+      .input('Id', sql.Int, requestId)
+      .input('AdminCnic', sql.NVarChar, adminCnic)
+      .input('Reason', sql.NVarChar(sql.MAX), reason || 'Request rejected by administrator')
+      .query(`
+        UPDATE CouncilChangeRequests
+        SET Status = 'rejected', ReviewedByCNIC = @AdminCnic, ReviewedDate = GETDATE(), ReviewReason = @Reason
+        WHERE Id = @Id
+      `);
+
+    // Notify user about rejection
+    try {
+      await pool.request()
+        .input('RecipientCNIC', sql.NVarChar, userCnic)
+        .input('Message', sql.NVarChar(sql.MAX), `Your council change request has been rejected. Reason: ${reason || 'No reason provided'}`)
+        .query('INSERT INTO Notifications (RecipientCNIC, Message) VALUES (@RecipientCNIC, @Message)');
+    } catch (notifyErr) {
+      console.error('Failed to notify user about rejection:', notifyErr);
+    }
+
+    console.log("✓ Council change request rejected:", requestId);
+    res.json({ 
+      message: "Council change request rejected successfully",
+      userCnic: userCnic
+    });
+  } catch (err) {
+    console.error("❌ Error rejecting council change request:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (pool) await pool.close();
+  }
+});
+
+const PORT = 3001; // Server will run on port 3001
+
+// ==========================================
+// SERVER STARTUP
+// ==========================================
+
+// Start everything in async wrapper so we can await DB initialization
 (async () => {
   try {
     console.log('🔧 Initializing database...');
-    await initDB();
+    await initDB(); // Initialize database tables and schema
     console.log(`✅ Database ready. Starting server on port ${PORT}`);
+
+    // Start the Express server
     const server = app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
+
+    // Handle server startup errors
     server.on('error', err => {
       if (err.code === 'EADDRINUSE') {
         console.error(`❌ Port ${PORT} is already in use. Is another instance running?`);
       } else {
         console.error('Server error:', err);
       }
-      process.exit(1);
+      process.exit(1); // Exit if server cannot start
     });
+
   } catch (startupErr) {
     console.error('❌ Failed to initialize application:', startupErr);
-    process.exit(1); // exit since server cannot function
+    process.exit(1); // Exit since server cannot function without database
   }
 })();
+
+// ==========================================
+// API ROUTES
+// ==========================================
 
 // 10. ASSIGN REQUEST TO AN NHC (Admin action)
 app.put('/api/request/assign', async (req, res) => {
@@ -4114,7 +4579,7 @@ app.post('/api/candidates/:id/support', async (req, res) => {
 
     // Check eligibility: must have at least 5 votes to be eligible
     let isEligible = false;
-    if (totalVotes >= 5) {
+    if (totalVotes >= 10) {
       isEligible = true;
       try {
         await pool.request()

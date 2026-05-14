@@ -84,23 +84,24 @@ const SuggestionsForm = ({ user, onClose, onSuccess }) => {
       position: 'fixed',
       top: 0,
       left: 0,
-      width: '100%',
-      height: '100%',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      width: '100vw',
+      height: '100vh',
+      backgroundColor: 'rgba(248, 250, 252, 0.98)',
       zIndex: 1000,
       display: 'flex',
       justifyContent: 'center',
-      alignItems: 'center',
-      padding: '20px'
+      alignItems: 'stretch',
+      padding: '0'
     }}>
       <div style={{
         backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '40px 30px',
+        borderRadius: '0',
+        padding: '32px 28px',
         width: '100%',
-        maxWidth: '720px',
-        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)',
-        maxHeight: '90vh',
+        maxWidth: 'none',
+        minHeight: '100vh',
+        maxHeight: '100vh',
+        boxShadow: 'none',
         overflowY: 'auto'
       }}>
         {/* HEADER */}

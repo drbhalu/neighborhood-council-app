@@ -141,13 +141,15 @@ const NotificationList = ({ user, onClose }) => {
 
   return (
     <div style={{
-      position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-      backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000,
-      display: 'flex', justifyContent: 'center', alignItems: 'center'
+      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+      backgroundColor: 'rgba(248,250,252,0.98)', zIndex: 2000,
+      display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+      padding: '0'
     }}>
       <div style={{ 
-          backgroundColor: 'white', padding: '20px', borderRadius: '8px', 
-          width: '90%', maxWidth: '400px', maxHeight: '80vh', overflowY: 'auto' 
+          backgroundColor: 'white', padding: '28px', borderRadius: '0', 
+          width: '100%', maxWidth: 'none', height: '100vh', maxHeight: '100vh', overflowY: 'auto',
+          boxShadow: 'none'
         }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
@@ -255,15 +257,15 @@ const NotificationList = ({ user, onClose }) => {
       {/* Detail Modal */}
       {notificationDetails && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 3000,
-          display: 'flex', justifyContent: 'center', alignItems: 'center',
-          padding: '16px'
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(248,250,252,0.98)', zIndex: 3000,
+          display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+          padding: '0'
         }}>
           <div style={{
-            backgroundColor: 'white', padding: '28px', borderRadius: '12px',
-            width: '100%', maxWidth: '550px', maxHeight: '85vh', overflowY: 'auto',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
+            backgroundColor: 'white', padding: '32px', borderRadius: '0',
+            width: '100%', maxWidth: 'none', height: '100vh', maxHeight: '100vh', overflowY: 'auto',
+            boxShadow: 'none'
           }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>

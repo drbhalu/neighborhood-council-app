@@ -335,7 +335,7 @@ const SelfNominationForm = ({ user, onBack }) => {
                 marginBottom: '24px',
                 color: '#0369a1'
               }}>
-                💡 Nominations are open today. Select your preferred position. You'll need 5 votes from your NHC members to become eligible.
+                💡 Nominations are open today. Select your preferred position. You'll need 10 votes from your NHC members to become eligible.
               </div>
             ) : (
               <div style={{
