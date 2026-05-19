@@ -1061,6 +1061,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
       )}
 
       {/* FINALIZE BUTTON - ONLY FOR PRESIDENT REVIEW */}
+       {/* FINALIZE BUTTON - ONLY FOR PRESIDENT REVIEW */}
       {isPresidentFinalReview && (
         <button
           onClick={handleSave}
