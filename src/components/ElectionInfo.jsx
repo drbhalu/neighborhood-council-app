@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { getElections } from '../api';
 
 const ElectionInfo = ({ user, onBack }) => {
+  // Loaded election records for the active NHC.
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchElections = async () => {
       try {
-        // Fetch elections for this specific NHC only
+        // Fetch elections for this specific NHC only.
         const data = await getElections(user.nhcId);
         setElections(data || []);
       } catch (error) {
@@ -43,7 +44,7 @@ const ElectionInfo = ({ user, onBack }) => {
         overflowY: 'auto',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
-        {/* HEADER */}
+        {/* Header and close action for the election info modal. */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -65,7 +66,7 @@ const ElectionInfo = ({ user, onBack }) => {
           </button>
         </div>
 
-        {/* CONTENT */}
+        {/* Election details, empty state, or loading indicator. */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
             <p>Loading election information...</p>
@@ -119,7 +120,7 @@ const ElectionInfo = ({ user, onBack }) => {
           </div>
         )}
 
-        {/* CLOSE BUTTON */}
+        {/* Back button to return to the previous screen. */}
         <button
           onClick={onBack}
           style={{

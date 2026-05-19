@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 const ThreeDotMenu = ({ onEditProfile, onRequestNHC, onChangeCouncil }) => {
+  // Lightweight action menu for profile and council shortcuts.
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
-  // Close menu if clicked outside
+  // Close the dropdown when the user clicks outside it.
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -17,7 +18,7 @@ const ThreeDotMenu = ({ onEditProfile, onRequestNHC, onChangeCouncil }) => {
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }} ref={menuRef}>
-      {/* THE 3-DOT BUTTON */}
+      {/* Trigger button that opens the action menu. */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
         style={{ 
@@ -28,7 +29,7 @@ const ThreeDotMenu = ({ onEditProfile, onRequestNHC, onChangeCouncil }) => {
         ⋮
       </button>
 
-      {/* THE DROPDOWN MENU (Shows 3 Buttons) */}
+      {/* Action menu with the three available shortcuts. */}
       {isOpen && (
         <div style={{
           position: 'absolute', right: 0, top: '30px',
@@ -36,7 +37,7 @@ const ThreeDotMenu = ({ onEditProfile, onRequestNHC, onChangeCouncil }) => {
           borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
           zIndex: 1000, width: '180px'
         }}>
-          {/* BUTTON 1: EDIT PROFILE */}
+          {/* Edit the current profile. */}
           <div 
             onClick={() => { onEditProfile(); setIsOpen(false); }}
             style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: '14px' }}
@@ -44,7 +45,7 @@ const ThreeDotMenu = ({ onEditProfile, onRequestNHC, onChangeCouncil }) => {
             Edit Profile
           </div>
           
-          {/* BUTTON 2: REQUEST NHC */}
+          {/* Request another NHC assignment. */}
           <div 
             onClick={() => { onRequestNHC(); setIsOpen(false); }}
             style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: '14px' }}
@@ -52,7 +53,7 @@ const ThreeDotMenu = ({ onEditProfile, onRequestNHC, onChangeCouncil }) => {
             Request NHC
           </div>
           
-          {/* BUTTON 3: CHANGE COUNCIL */}
+          {/* Ask to move to a different council. */}
           <div 
             onClick={() => { onChangeCouncil(); setIsOpen(false); }}
             style={{ padding: '10px 15px', cursor: 'pointer', fontSize: '14px' }}

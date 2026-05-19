@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getElectionStats } from '../api';
 
 const ElectionResults = ({ user, onBack }) => {
+  // Hold the election summary and loading state for the results view.
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [election, setElection] = useState(null);
@@ -18,7 +19,7 @@ const ElectionResults = ({ user, onBack }) => {
           return;
         }
 
-        // Fetch latest election info (including ended elections) to check if it has ended
+        // Fetch the latest election to confirm results are allowed to show.
         console.log('Loading election data for NHC ID:', user.nhcId);
         const response = await fetch(`/api/election-by-nhc/${user.nhcId}`);
         
@@ -30,7 +31,7 @@ const ElectionResults = ({ user, onBack }) => {
 
         const userElection = await response.json();
 
-        // Check if election has ended
+        // Results are only shown after the election end date.
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const endDate = new Date(userElection.ElectionEndDate);
@@ -47,7 +48,7 @@ const ElectionResults = ({ user, onBack }) => {
         setElection(userElection);
         setIsElectionEnded(true);
 
-        // Request stats by NHC (fetch latest election for this NHC)
+        // Load per-candidate stats once the election is confirmed ended.
         console.log('Loading election stats for NHC ID:', user.nhcId);
         const data = await getElectionStats({ nhcId: user.nhcId });
         console.log('Received election stats:', data);
@@ -86,7 +87,7 @@ const ElectionResults = ({ user, onBack }) => {
         overflowY: 'auto',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
-        {/* HEADER */}
+        {/* Header with title and close action. */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -108,7 +109,7 @@ const ElectionResults = ({ user, onBack }) => {
           </button>
         </div>
 
-        {/* CONTENT */}
+        {/* Results states and winner tables. */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
             <p>Loading election results...</p>
@@ -160,7 +161,7 @@ const ElectionResults = ({ user, onBack }) => {
           </div>
         ) : (
           <div>
-            {/* ELECTION ENDED BANNER */}
+            {/* Banner confirming the results are final. */}
             <div style={{
               backgroundColor: '#dcfce7',
               border: '2px solid #10b981',
@@ -174,7 +175,7 @@ const ElectionResults = ({ user, onBack }) => {
               </p>
             </div>
 
-            {/* PRESIDENT CATEGORY */}
+            {/* President race results. */}
             <div style={{ marginBottom: '30px' }}>
               <h3 style={{ margin: '0 0 20px 0', color: '#1f2937', borderBottom: '2px solid #10b981', paddingBottom: '10px' }}>
                 👑 President Results
@@ -192,16 +193,25 @@ const ElectionResults = ({ user, onBack }) => {
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                        <div>
-                          <p style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
-                            {index === 0 && '🥇 '}
-                            {index === 1 && '🥈 '}
-                            {index === 2 && '🥉 '}
-                            {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
-                          </p>
-                          <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
-                            CNIC: {candidate.CNIC}
-                          </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {candidate.profileImage || candidate.ProfileImage ? (
+                              <img src={candidate.profileImage || candidate.ProfileImage} alt="Candidate" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                            ) : (
+                              <span style={{ fontSize: '16px', fontWeight: '700', color: '#64748b' }}>{`${(candidate.FirstName || '').charAt(0)}${(candidate.LastName || '').charAt(0)}` || '👤'}</span>
+                            )}
+                          </div>
+                          <div>
+                            <p style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+                              {index === 0 && '🥇 '}
+                              {index === 1 && '🥈 '}
+                              {index === 2 && '🥉 '}
+                              {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
+                            </p>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
+                              CNIC: {candidate.CNIC}
+                            </p>
+                          </div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ fontSize: '28px', fontWeight: 'bold', color: index === 0 ? '#f59e0b' : '#10b981' }}>
@@ -218,19 +228,13 @@ const ElectionResults = ({ user, onBack }) => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             {candidate.PanelMembers.map(m => (
                               <div key={m.CNIC} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{
-                                  display: 'inline-block',
-                                  padding: '2px 8px',
-                                  backgroundColor: m.Role === 'President' ? '#fbbf24' : m.Role === 'Treasurer' ? '#60a5fa' : m.Role === 'Vice President' ? '#34d399' : '#d1d5db',
-                                  color: 'white',
-                                  borderRadius: '12px',
-                                  fontSize: '10px',
-                                  fontWeight: 'bold',
-                                  minWidth: '75px',
-                                  textAlign: 'center'
-                                }}>
-                                  {m.Role}
-                                </span>
+                                <div style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {m.profileImage || m.ProfileImage ? (
+                                    <img src={m.profileImage || m.ProfileImage} alt="member" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                                  ) : (
+                                    <span style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>{`${(m.FirstName||'').charAt(0)}${(m.LastName||'').charAt(0)}` || '👤'}</span>
+                                  )}
+                                </div>
                                 <span style={{ fontWeight: '500' }}>{m.FirstName && m.LastName ? `${m.FirstName} ${m.LastName}` : m.CNIC}</span>
                               </div>
                             ))}
@@ -263,16 +267,25 @@ const ElectionResults = ({ user, onBack }) => {
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                        <div>
-                          <p style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
-                            {index === 0 && '🥇 '}
-                            {index === 1 && '🥈 '}
-                            {index === 2 && '🥉 '}
-                            {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
-                          </p>
-                          <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
-                            CNIC: {candidate.CNIC}
-                          </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {candidate.profileImage || candidate.ProfileImage ? (
+                              <img src={candidate.profileImage || candidate.ProfileImage} alt="Candidate" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                            ) : (
+                              <span style={{ fontSize: '16px', fontWeight: '700', color: '#64748b' }}>{`${(candidate.FirstName || '').charAt(0)}${(candidate.LastName || '').charAt(0)}` || '👤'}</span>
+                            )}
+                          </div>
+                          <div>
+                            <p style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+                              {index === 0 && '🥇 '}
+                              {index === 1 && '🥈 '}
+                              {index === 2 && '🥉 '}
+                              {candidate.FirstName && candidate.LastName ? `${candidate.FirstName} ${candidate.LastName}` : candidate.CNIC}
+                            </p>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
+                              CNIC: {candidate.CNIC}
+                            </p>
+                          </div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ fontSize: '28px', fontWeight: 'bold', color: index === 0 ? '#f59e0b' : '#0ea5e9' }}>
@@ -289,19 +302,13 @@ const ElectionResults = ({ user, onBack }) => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             {candidate.PanelMembers.map(m => (
                               <div key={m.CNIC} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{
-                                  display: 'inline-block',
-                                  padding: '2px 8px',
-                                  backgroundColor: m.Role === 'President' ? '#fbbf24' : m.Role === 'Treasurer' ? '#60a5fa' : m.Role === 'Vice President' ? '#34d399' : '#d1d5db',
-                                  color: 'white',
-                                  borderRadius: '12px',
-                                  fontSize: '10px',
-                                  fontWeight: 'bold',
-                                  minWidth: '75px',
-                                  textAlign: 'center'
-                                }}>
-                                  {m.Role}
-                                </span>
+                                <div style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {m.profileImage || m.ProfileImage ? (
+                                    <img src={m.profileImage || m.ProfileImage} alt="member" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                                  ) : (
+                                    <span style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>{`${(m.FirstName||'').charAt(0)}${(m.LastName||'').charAt(0)}` || '👤'}</span>
+                                  )}
+                                </div>
                                 <span style={{ fontWeight: '500' }}>{m.FirstName && m.LastName ? `${m.FirstName} ${m.LastName}` : m.CNIC}</span>
                               </div>
                             ))}

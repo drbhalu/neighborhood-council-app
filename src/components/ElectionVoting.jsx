@@ -5,6 +5,7 @@ import ElectionResults from './ElectionResults';
 import logo from '../assets/logo.png';
 
 const ElectionVoting = ({ user, onBack }) => {
+  // Voting flow state for election availability and candidate selection.
   const [loading, setLoading] = useState(true);
   const [candidates, setCandidates] = useState([]);
   const [election, setElection] = useState(null);
@@ -21,7 +22,7 @@ const ElectionVoting = ({ user, onBack }) => {
         setLoading(true);
         setError(null);
 
-        // Fetch elections for this specific NHC only
+        // Load the active election for this user's NHC only.
         const electionsData = await getElections(user.nhcId);
         const userElection = (electionsData || [])[0]; // Backend now filters by nhcId
 
@@ -31,7 +32,7 @@ const ElectionVoting = ({ user, onBack }) => {
           return;
         }
 
-        // Check if election is currently active
+        // Determine whether voting is currently allowed.
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const startDate = new Date(userElection.ElectionStartDate);
@@ -46,7 +47,7 @@ const ElectionVoting = ({ user, onBack }) => {
           return;
         }
 
-        // Treat election as ended when today is on or after the ElectionEndDate
+        // Treat the election as ended once the end date has been reached.
         if (today >= endDate) {
           setElectionEnded(true);
           setIsElectionActive(false);
@@ -56,7 +57,7 @@ const ElectionVoting = ({ user, onBack }) => {
         setElection(userElection);
         setIsElectionActive(true);
 
-        // Fetch only eligible candidates for voting
+        // Only show candidates this user is allowed to vote for.
         const candidatesData = await getCandidates(userElection.NHC_Id, user.cnic, true);
         
         if (candidatesData.length === 0) {
@@ -77,6 +78,7 @@ const ElectionVoting = ({ user, onBack }) => {
   }, [user.nhcCode, user.cnic]);
 
   const handleVote = async () => {
+    // Submit the selected vote and refresh the candidate list.
     if (!selectedCandidate || !election || !isElectionActive) {
       alert('Unable to cast vote. Please select a candidate and ensure election is active.');
       return;
@@ -130,7 +132,7 @@ const ElectionVoting = ({ user, onBack }) => {
         overflowY: 'auto',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
-        {/* HEADER */}
+        {/* Header and exit action for the voting modal. */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -152,13 +154,13 @@ const ElectionVoting = ({ user, onBack }) => {
           </button>
         </div>
 
-        {/* LOADING STATE */}
+        {/* Loading, success, error, and voting states are handled below. */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
             <p>Loading election information and eligible candidates...</p>
           </div>
         ) : voted ? (
-          // SUCCESS STATE
+          // Success state shown after the vote is recorded.
           <div style={{
             textAlign: 'center',
             padding: '40px 20px',
@@ -177,7 +179,7 @@ const ElectionVoting = ({ user, onBack }) => {
         ) : electionEnded ? (
           <ElectionResults user={user} onBack={onBack} />
         ) : error && !isElectionActive ? (
-          // ERROR STATE - NO ACTIVE ELECTION
+          // Error state when voting is unavailable.
           <div style={{
             backgroundColor: '#fee2e2',
             border: '2px solid #ef4444',
@@ -209,9 +211,9 @@ const ElectionVoting = ({ user, onBack }) => {
             </button>
           </div>
         ) : (
-          // NORMAL VOTING STATE
+          // Normal voting state with election info and candidate cards.
           <div>
-            {/* ELECTION INFO */}
+            {/* Election details for the active contest. */}
             {election && (
               <div style={{
                 backgroundColor: '#f0f9ff',
@@ -231,7 +233,7 @@ const ElectionVoting = ({ user, onBack }) => {
                 </p>
               </div>
             )}
-
+        
             {error && (
               <div style={{
                 backgroundColor: '#fef3c7',
@@ -281,36 +283,55 @@ const ElectionVoting = ({ user, onBack }) => {
                         }
                       }}
                     >
-                      <div style={{ marginBottom: '10px' }}>
-                        <p style={{ margin: '0 0 5px 0', fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>
-                          {candidate.FirstName} {candidate.LastName}
-                        </p>
-                        {/* panel name always shown (fallback when empty) */}
-                        <p style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#6b7280' }}>
-                          📋 Panel: {candidate.PanelName || <em>(unnamed)</em>}
-                        </p>
-                        {/* panel member list for transparency */}
-                        {candidate.PanelMembers && candidate.PanelMembers.length > 0 && (
-                          <div style={{
-                            fontSize: '12px',
-                            color: '#1f2937',
-                            marginBottom: '8px',
-                            backgroundColor: '#f0f9ff',
-                            padding: '8px',
-                            borderRadius: '4px',
-                            borderLeft: '3px solid #3b82f6'
-                          }}>
-                            <p style={{ margin: '0 0 6px 0', fontWeight: 'bold', color: '#0c4a6e' }}>👥 Panel Members:</p>
-                            {candidate.PanelMembers.map((m) => (
-                              <p key={m.CNIC} style={{ margin: 0 }}>
-                                {m.FirstName} {m.LastName}{m.Role ? ` (${m.Role})` : ''}
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                        <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
-                          Position: {candidate.Category}
-                        </p>
+                      <div style={{ marginBottom: '10px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div style={{ width: 48, height: 48, borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {candidate.profileImage || candidate.ProfileImage ? (
+                            <img src={candidate.profileImage || candidate.ProfileImage} alt="candidate" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{ fontWeight: '700', color: '#64748b' }}>{`${(candidate.FirstName||'').charAt(0)}${(candidate.LastName||'').charAt(0)}` || '👤'}</span>
+                          )}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: '0 0 5px 0', fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>
+                            {candidate.FirstName} {candidate.LastName}
+                          </p>
+                          <p style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#6b7280' }}>
+                            📋 Panel: {candidate.PanelName || <em>(unnamed)</em>}
+                          </p>
+                          {candidate.PanelMembers && candidate.PanelMembers.length > 0 && (
+                            <div style={{
+                              fontSize: '12px',
+                              color: '#1f2937',
+                              marginBottom: '8px',
+                              backgroundColor: '#f0f9ff',
+                              padding: '12px',
+                              borderRadius: '8px',
+                              borderLeft: '3px solid #3b82f6'
+                            }}>
+                              <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', color: '#0c4a6e' }}>👥 Panel Members:</p>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
+                                {candidate.PanelMembers.map((m) => (
+                                  <div key={m.CNIC} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px', borderRadius: '6px', backgroundColor: '#ffffff' }}>
+                                    <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      {m.profileImage ? (
+                                        <img src={m.profileImage} alt={`${m.FirstName} ${m.LastName}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      ) : (
+                                        <span style={{ fontWeight: '700', color: '#64748b' }}>{`${(m.FirstName||'').charAt(0)}${(m.LastName||'').charAt(0)}` || '👤'}</span>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827' }}>{m.FirstName} {m.LastName}</div>
+                                      <div style={{ fontSize: '11px', color: '#4f46e5' }}>{m.Role || 'Member'}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
+                            Position: {candidate.Category}
+                          </p>
+                        </div>
                       </div>
                       <div style={{
                         display: 'flex',
@@ -418,6 +439,8 @@ const ElectionVoting = ({ user, onBack }) => {
             </button>
           </div>
         )}
+
+        
       </div>
     </div>
   );

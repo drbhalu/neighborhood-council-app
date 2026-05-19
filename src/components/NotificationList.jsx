@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { getNotifications, acceptPanelInvite, declinePanelInvite, getNHCList } from '../api';
 
 const NotificationList = ({ user, onClose }) => {
+  // Notifications are scoped to the active user and council.
   const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [notificationDetails, setNotificationDetails] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Poll notifications so panel invites and status changes appear quickly.
     const fetchNotifications = async () => {
       try {
         const data = await getNotifications(user.cnic, user.nhcCode);
@@ -28,6 +30,7 @@ const NotificationList = ({ user, onClose }) => {
       'complaint_approval': 'Complaint Approved',
       'complaint_update': 'Complaint Updated',
       'complaint_resolution': 'Complaint Resolved',
+      'public_complaint': 'Public Complaint',
       'budget_allocated': 'Budget Allocated',
       'budget_released': 'Budget Released',
       'election_scheduled': 'Election Scheduled',
@@ -41,7 +44,7 @@ const NotificationList = ({ user, onClose }) => {
     setLoading(true);
     setSelectedNotification(notification);
     
-    // Build context details based on NotificationType
+    // Build the detail panel context based on the notification type.
     let details = {
       id: notification.Id,
       message: notification.Message,
@@ -53,7 +56,7 @@ const NotificationList = ({ user, onClose }) => {
     };
 
     try {
-      // Handle complaint-related notifications
+        // Complaint notifications fetch the linked complaint and complainant.
       if (notification.RelatedComplaintId && 
           (notification.NotificationType?.includes('complaint') || 
            notification.NotificationType?.includes('budget'))) {
@@ -83,6 +86,7 @@ const NotificationList = ({ user, onClose }) => {
             description: complaint.Description || '',
             status: complaint.Status,
             category: complaint.Category,
+            isPublicComplaint: String(complaint.PublicComplaint || '').toLowerCase() === '1' || complaint.PublicComplaint === true,
             complainant: complainantName,
             nhc: nhcName,
             location: complaint.Location || 'N/A',
@@ -92,7 +96,7 @@ const NotificationList = ({ user, onClose }) => {
           details.source = `Complaint #${complaint.Id} from ${complainantName}`;
         }
       } 
-      // Handle election notifications
+      // Election notifications only need a lightweight context block.
       else if (notification.RelatedElectionId && notification.NotificationType?.includes('election')) {
         details.context = {
           type: 'Election',
@@ -101,7 +105,7 @@ const NotificationList = ({ user, onClose }) => {
         };
         details.source = `Election #${notification.RelatedElectionId}`;
       } 
-      // Handle meeting notifications
+      // Meeting notifications are also summarized inline.
       else if (notification.RelatedMeetingId && notification.NotificationType?.includes('meeting')) {
         details.context = {
           type: 'Committee Meeting',
@@ -111,7 +115,7 @@ const NotificationList = ({ user, onClose }) => {
         details.source = `Committee Meeting #${notification.RelatedMeetingId}`;
       }
 
-      // If it's a panel invitation
+      // Panel invites get action buttons for accept/decline.
       if (notification.PanelId && notification.Role) {
         details.source = `Panel Invitation - ${notification.Role} Role`;
         details.context = {
@@ -121,7 +125,7 @@ const NotificationList = ({ user, onClose }) => {
         };
       }
 
-      // Fallback for notifications without context
+      // Fallback for notifications without any linked context.
       if (!details.source) {
         details.source = 'Notification';
       }
@@ -152,11 +156,13 @@ const NotificationList = ({ user, onClose }) => {
           boxShadow: 'none'
         }}>
         
+        {/* Header for the notifications drawer. */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
           <h3>Notifications</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
         </div>
 
+        {/* Show either the empty state or the notification list. */}
         {notifications.length === 0 ? (
           <p style={{ textAlign: 'center', color: '#888' }}>No new notifications.</p>
         ) : (
@@ -254,7 +260,7 @@ const NotificationList = ({ user, onClose }) => {
         )}
       </div>
 
-      {/* Detail Modal */}
+      {/* Detail modal with linked entity context. */}
       {notificationDetails && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
@@ -327,6 +333,12 @@ const NotificationList = ({ user, onClose }) => {
                         <p style={{ margin: 0, color: '#0f172a', fontWeight: '500' }}>{notificationDetails.context.nhc}</p>
                       </div>
                     </div>
+
+                    {notificationDetails.context.isPublicComplaint && (
+                      <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '8px', backgroundColor: '#ecfdf5', border: '1px solid #86efac', color: '#065f46', fontSize: '12px', lineHeight: 1.5 }}>
+                        Public hearing: this complaint is visible to all NHC members. Open it from the notification to review the hearing context.
+                      </div>
+                    )}
                     
                     <hr style={{ margin: '12px 0', border: 'none', borderTop: '1px solid #d1fae5' }} />
                     

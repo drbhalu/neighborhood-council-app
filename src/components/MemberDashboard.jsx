@@ -21,10 +21,12 @@ import SuggestionsForm from './SuggestionsForm'; // NEW: Added Import
 import TreasurerBudgetManagement from './TreasurerBudgetManagement'; // NEW: Added Import
 import BudgetRequestForm from './BudgetRequestForm'; // Added Import
 import ChangeCouncilRequest from './ChangeCouncilRequest'; // NEW: Council change
+import PanelSupportMembers from './PanelSupportMembers';
 import { updateUser, getComplaintsByNHC, getPanels, getUserRoleInNHC, submitCouncilChangeRequest } from '../api';
 import logo from '../assets/logo.png';
  
 const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }) => {
+  // Keep a local copy so role and profile updates can be reflected immediately.
   const [currentUser, setCurrentUser] = useState(user);
   const [isEditing, setIsEditing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false); // FIX: Added State
@@ -49,11 +51,12 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
   const [selectedCommitteeForMeeting, setSelectedCommitteeForMeeting] = useState(null);
   const [showCouncilChangeRequest, setShowCouncilChangeRequest] = useState(false); // NEW: Council change modal
 
-  // Check if user has multiple NHCs
+  // Check if user has multiple NHCs so the back button only appears when needed.
   const hasMultipleNHCs = user && user.nhcOptions && user.nhcOptions.length > 1;
 
   const isOfficer = ['President', 'Treasurer', 'Vice President'].includes(currentUser.role);
   const isPresident = currentUser.role === 'President';
+  const isVice = currentUser.role === 'Vice President';
   const hasCommitteeMembership = memberCommittees.length > 0;
   const committeeBackView = isPresident ? 'list' : 'complaints';
 
@@ -111,12 +114,18 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
   );
 
   const selectedCommitteeComplaints = committeeGroups.find((group) => group.id === selectedCommitteeId)?.complaints || [];
-  const activeCommitteeComplaints = selectedCommitteeComplaints.filter((complaint) => {
-    const status = String(complaint.ComplaintStatus || complaint.Status || '').trim().toLowerCase();
-    return status !== 'resolved';
-  });
+  const isCommitteeComplaintUrgent = (complaint) => {
+    const value = String(complaint?.UrgentComplaint || complaint?.urgentComplaint || '').toLowerCase();
+    return value === '1' || value === 'true' || complaint?.UrgentComplaint === 1 || complaint?.UrgentComplaint === true;
+  };
+  const activeCommitteeComplaints = selectedCommitteeComplaints
+    .filter((complaint) => {
+      const status = String(complaint.ComplaintStatus || complaint.Status || '').trim().toLowerCase();
+      return status !== 'resolved';
+    })
+    .sort((a, b) => Number(isCommitteeComplaintUrgent(b)) - Number(isCommitteeComplaintUrgent(a)));
 
-  // Verify NHC-specific role whenever NHC code changes
+  // Re-check the user's role for the selected NHC so stale cached roles do not leak through.
   useEffect(() => {
     const verifyRoleForNHC = async () => {
       if (!currentUser.nhcCode) return;
@@ -136,7 +145,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
     verifyRoleForNHC();
   }, [currentUser.cnic, currentUser.nhcCode]); // Re-verify whenever cnic or nhcCode changes
 
-  // Verify role on component mount to clear stale cached role after election ends
+  // Verify role again on mount as a second pass against stale persisted state.
   useEffect(() => {
     const verifyRoleOnMount = async () => {
       if (!currentUser?.cnic || !currentUser?.nhcCode) return;
@@ -207,6 +216,15 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
   const inProgressComplaints = complaints.filter(c => normalizeStatus(c.Status) === 'in-progress').length;
   const resolvedComplaints = complaints.filter(c => normalizeStatus(c.Status) === 'resolved').length;
 
+  const getDashboardLabel = () => {
+    const role = String(currentUser?.role || '').toLowerCase();
+    if (role === 'president') return 'President Dashboard';
+    if (role === 'treasurer') return 'Treasurer Dashboard';
+    if (role === 'vice president') return 'Vice President Dashboard';
+    return 'Member Dashboard';
+  };
+
+  // Save profile edits and keep the dashboard state in sync.
   const handleSaveProfile = async (updatedData) => {
     try {
       await updateUser(updatedData.cnic, updatedData);
@@ -218,7 +236,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
     }
   };
 
-  // this handler will be provided by parent (App.jsx) to navigate to request page
+  // Ask the parent to open the NHC request flow.
   const handleRequestNHC = () => {
     if (typeof onRequestNHCPage === 'function') {
       onRequestNHCPage();
@@ -228,6 +246,18 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
 
   const handleChangeCouncil = () => {
     setShowCouncilChangeRequest(true);
+  };
+
+  const handleOpenCommittee = () => {
+    if (!hasCommitteeMembership && !isPresident) {
+      alert('You are not in any committee.');
+      return;
+    }
+
+    setSelectedCommittee(null);
+    setSelectedCommitteeName('');
+    setShowCommittee(true);
+    setCommitteeView(isPresident ? 'list' : 'names');
   };
 
   const handleCouncilChangeSubmit = async (requestData) => {
@@ -251,7 +281,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
   return (
     <div className="admin-dashboard-container">
       
-      {/* HEADER */}
+      {/* Header: identity, navigation, and quick actions. */}
       <div className="dashboard-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
          {/* LEFT: Back button if multiple NHCs */}
          <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -284,7 +314,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
         
         {/* CENTER: TITLE + THREE DOT MENU ON SAME LINE */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ fontWeight: 'bold', fontSize: '25px' }}>MEMBER DASHBOARD</div>
+          <div style={{ fontWeight: 'bold', fontSize: '25px' }}>{getDashboardLabel()}</div>
           <ThreeDotMenu 
             onEditProfile={() => setIsEditing(true)} 
             onRequestNHC={handleRequestNHC}
@@ -296,10 +326,10 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
         <div></div>
       </div>
 
-      {/* CONTENT */}
+      {/* Main content: profile summary, stats, and feature buttons. */}
       <div style={{ padding: '30px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         
-        {/* 1. PROFILE PICTURE */}
+        {/* Profile picture or placeholder avatar. */}
         <div style={{
             width: '120px', height: '120px', borderRadius: '50%',
             backgroundColor: '#e2e8f0', display: 'flex', 
@@ -314,12 +344,12 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
 
         </div>
 
-        {/* 2. USER NAME */}
+        {/* Display the signed-in member's name. */}
         <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#1f2937', textAlign: 'center' }}>
           {currentUser.firstName} {currentUser.lastName}
         </h2>
 
-        {/* 3. NHC CODE */}
+        {/* Show the currently assigned NHC code. */}
         <div style={{ 
             margin: '0 0 40px 0', fontSize: '18px', fontWeight: 'bold', 
             color: '#2563eb', backgroundColor: '#eff6ff', 
@@ -340,7 +370,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
           CNIC: {currentUser.cnic || 'N/A'}
         </div>
 
-        {/* 3.5 ADD NEW NHC BUTTON */}
+        {/* Let the member request another NHC assignment. */}
         <button 
           onClick={handleRequestNHC}
           style={{
@@ -365,7 +395,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
           Add New NHC
         </button>
 
-        {/* PRESIDENT STATISTICS CARDS (President only) */}
+        {/* President-only complaint summary cards. */}
         {isPresident && (
           <div style={{ width: '100%', marginBottom: '40px' }}>
             <h3 style={{
@@ -458,7 +488,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
           </div>
         )}
 
-        {/* 4. BUTTONS */}
+        {/* Main navigation buttons for member actions. */}
         <div className="dashboard-menu" style={{ width: '100%' }}>
           <button 
             className="menu-btn" 
@@ -489,17 +519,10 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
             <button className="menu-btn" onClick={() => setShowReports(true)}>Dashboard</button>
           )}
           
-          {/* Committee button (officers) */}
-          {(isOfficer || hasCommitteeMembership) && (
-            <button className="menu-btn" onClick={() => {
-              setSelectedCommittee(null);
-              setSelectedCommitteeName('');
-              setShowCommittee(true);
-              setCommitteeView(isPresident ? 'list' : 'names');
-            }}>
-              Committee ({currentUser.role})
-            </button>
-          )}
+          {/* Committee button (visible to all; only committee members can open data) */}
+          <button className="menu-btn" onClick={handleOpenCommittee}>
+            Committee ({currentUser.role})
+          </button>
 
           {/* Treasurer Budget button */}
           {currentUser.role === 'Treasurer' && (
@@ -773,7 +796,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
                           cursor: 'pointer',
                         }}
                       >
-                        Request Budget
+                        Rise Money
                       </button>
                     </div>
                   </div>
@@ -877,8 +900,8 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
 
                     <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '10px' }}>
                       Complaint ID: {committee.ComplaintId}
+                      {committee.ComplaintId.PublicComplaint}
                     </div>
-
                     <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#334155', lineHeight: 1.5 }}>
                       {committee.ComplaintDescription || 'No complaint details available.'}
                     </p>
@@ -902,8 +925,7 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
                       >
                         Add Meeting Decisions
                       </button>
-
-                      <button
+{isVice &&( <button
                         onClick={() => {
                           setSelectedCommitteeForMeeting(committee);
                           setShowCallMeeting(true);
@@ -920,7 +942,8 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
                         }}
                       >
                         Call Meeting
-                      </button>
+                      </button>)}
+                     
 
                     </div>
                   </div>
@@ -1179,6 +1202,16 @@ const MemberDashboard = ({ user, onLogout, onRequestNHCPage, onBackToChooseNHC }
       {/* FIX: Nomination Info Screen */}
       {selectedElectionOption === 'nomination' && (
         <NominationInfo
+          user={currentUser}
+          onBack={() => {
+            setSelectedElectionOption(null);
+            setShowElectionsMenu(true);
+          }}
+        />
+      )}
+
+      {selectedElectionOption === 'panel-support-members' && (
+        <PanelSupportMembers
           user={currentUser}
           onBack={() => {
             setSelectedElectionOption(null);

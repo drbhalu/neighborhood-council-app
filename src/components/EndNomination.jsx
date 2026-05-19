@@ -4,6 +4,7 @@ import { getNHCList, getNominations, deleteNominationDate } from '../api';
 import logo from '../assets/logo.png';
 
 const EndNomination = ({ onBack }) => {
+  // Manual nomination shutdown screen for admins.
   const [nhcList, setNhcList] = useState([]);
   const [nominations, setNominations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +34,7 @@ const EndNomination = ({ onBack }) => {
   };
 
   const handleEndNomination = async (nhcId, nhcName) => {
+    // Remove the current nomination schedule immediately.
     const confirm = window.confirm(
       `Are you sure you want to END the nomination period for "${nhcName}" immediately?`
     );
@@ -57,7 +59,7 @@ const EndNomination = ({ onBack }) => {
 
   return (
     <div className="admin-dashboard-container">
-      {/* HEADER */}
+      {/* Header for ending nomination windows. */}
       <div className="dashboard-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <img src={logo} alt="Logo" style={{ height: '100px', width: 'auto' }} />
@@ -71,7 +73,7 @@ const EndNomination = ({ onBack }) => {
         <div></div>
       </div>
 
-      {/* CONTENT */}
+      {/* List of active nomination schedules. */}
       <div style={{ padding: '30px 20px', width: '100%' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>

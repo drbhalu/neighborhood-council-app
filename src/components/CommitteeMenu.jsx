@@ -16,7 +16,7 @@ const CommitteeMenu = ({ onSelectCommittees, onSelectRaiseMoney, onClose }) => {
         zIndex: 999,
       }}
     >
-      {/* MODAL CARD */}
+      {/* Two-option committee menu for the president or committee lead. */}
       <div
         style={{
           backgroundColor: 'white',

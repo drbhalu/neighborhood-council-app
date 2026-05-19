@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPanel, getNominations, getPanels, getNHCMembers, getPanelMembers, getPositions } from '../api';
 
 const SelfNominationForm = ({ user, onBack }) => {
+  // Form state for creating a panel during an open nomination window.
   const [panelName, setPanelName] = useState('');
   const [positions, setPositions] = useState([]); // array of {Id, Name}
   const [roleAssignments, setRoleAssignments] = useState({}); // roleName -> cnic
@@ -16,9 +17,10 @@ const SelfNominationForm = ({ user, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [availableMembers, setAvailableMembers] = useState([]);
   const [panelMemberCnics, setPanelMemberCnics] = useState(new Set());
+  const [openRoleDropdown, setOpenRoleDropdown] = useState(null);
 
   const handleCreatePanel = async () => {
-    // only allow creation if all non-president positions are assigned
+    // Require a full, unique set of assignments before panel creation.
     if (!panelName) {
       alert('Please fill out panel name');
       return;
@@ -39,7 +41,7 @@ const SelfNominationForm = ({ user, onBack }) => {
       return;
     }
 
-    // build list of member assignments excluding president
+    // Build member assignments excluding the president role.
     const assignments = [];
     for (const pos of positions) {
       if (pos.Name === 'President') continue;
@@ -55,7 +57,7 @@ const SelfNominationForm = ({ user, onBack }) => {
       assignments.push({ cnic: sel, role: pos.Name });
     }
 
-    // ensure distinct CNICs
+    // Prevent the same member from occupying multiple roles.
     const cnicSet = new Set(assignments.map(a => String(a.cnic)));
     if (cnicSet.size !== assignments.length) {
       alert('Duplicate CNICs selected for different roles.');
@@ -101,7 +103,7 @@ const SelfNominationForm = ({ user, onBack }) => {
           return;
         }
 
-        // determine nomination period for this specific NHC
+        // Determine the active nomination window for this NHC.
         const nominations = await getNominations(user.nhcId);
         const nhcRecords = (nominations || []); // Backend now filters by nhcId
         let record = null;
@@ -154,7 +156,7 @@ const SelfNominationForm = ({ user, onBack }) => {
           setCurrentNominationId(null);
         }
 
-        // check if user is part of any panel in this nomination cycle
+        // See whether the user is already tied to a panel in this cycle.
         try {
           const panels = await getPanels({ cnic: user.cnic, nhcId: user.nhcId, nominationId: record?.Id || null });
           setAlreadyNominated((panels || []).length > 0);
@@ -163,7 +165,7 @@ const SelfNominationForm = ({ user, onBack }) => {
           setAlreadyNominated(false);
         }
 
-        // load available members in this NHC
+        // Load members available for nomination assignment.
         try {
           const members = await getNHCMembers(user.nhcId);
           setAvailableMembers(members || []);
@@ -172,7 +174,7 @@ const SelfNominationForm = ({ user, onBack }) => {
           setAvailableMembers([]);
         }
 
-        // load positions so form can render dynamic fields
+        // Load positions so the form can build the dynamic role inputs.
         try {
           const pos = await getPositions();
           setPositions(pos || []);
@@ -187,7 +189,7 @@ const SelfNominationForm = ({ user, onBack }) => {
           setPositions([]);
         }
 
-        // load all existing panel members from this nomination cycle to filter them out from dropdown
+        // Exclude members already used in other panels for the cycle.
         try {
           const allPanels = await getPanels({ nhcId: user.nhcId, nominationId: record?.Id || null });
           const panelCnics = new Set();
@@ -227,6 +229,24 @@ const SelfNominationForm = ({ user, onBack }) => {
   const nonPresidentRoles = positions.filter(p => p.Name !== 'President');
   const missingRole = nonPresidentRoles.some(p => !roleAssignments[p.Name]);
   const conflictRole = nonPresidentRoles.some(p => panelMemberCnics.has(roleAssignments[p.Name] || ''));
+
+  useEffect(() => {
+    const handleDocumentClick = () => setOpenRoleDropdown(null);
+    document.addEventListener('click', handleDocumentClick);
+    return () => document.removeEventListener('click', handleDocumentClick);
+  }, []);
+
+  const getMemberDisplayName = (member) => {
+    if (!member) return '';
+    return `${member.FirstName || ''} ${member.LastName || ''}`.trim() || member.CNIC || '';
+  };
+
+  const getMemberProfileSrc = (member) => member?.profileImage || member?.ProfileImage || '';
+
+  const isMemberAssignedElsewhere = (member, currentRole) => {
+    if (!member) return false;
+    return Object.entries(roleAssignments).some(([role, cnic]) => role !== currentRole && String(cnic) === String(member.CNIC));
+  };
 
   // when a panel is created, poll its status until approved
   useEffect(() => {
@@ -391,40 +411,106 @@ const SelfNominationForm = ({ user, onBack }) => {
                 </div>
               )}
 
-              {positions.filter(p => p.Name !== 'President').map(pos => (
-                <div key={pos.Name} style={{ marginBottom: '16px' }}>
-                  <label style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#1f2937'
-                  }}>{pos.Name}</label>
-                  <select
-                    value={roleAssignments[pos.Name] || ''}
-                    onChange={e => setRoleAssignments(prev => ({ ...prev, [pos.Name]: e.target.value }))}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontFamily: 'inherit',
-                      fontSize: '14px',
-                      backgroundColor: 'white',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="">-- Select {pos.Name} --</option>
-                    {availableMembers.map(member => (
-                      !panelMemberCnics.has(member.CNIC) && member.CNIC !== user.cnic && !Object.values(roleAssignments).includes(member.CNIC) && (
-                        <option key={member.CNIC} value={member.CNIC}>
-                          {member.FirstName} {member.LastName} ({member.CNIC})
-                        </option>
-                      )
-                    ))}
-                  </select>
-                </div>
-              ))}
+              {positions.filter(p => p.Name !== 'President').map(pos => {
+                const selectedCnic = roleAssignments[pos.Name] || '';
+                const selectedMember = availableMembers.find(member => String(member.CNIC) === String(selectedCnic));
+                return (
+                  <div key={pos.Name} style={{ marginBottom: '16px' }}>
+                    <label style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#1f2937'
+                    }}>{pos.Name}</label>
+                    <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setOpenRoleDropdown(openRoleDropdown === pos.Name ? null : pos.Name); }}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          backgroundColor: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          fontSize: '14px',
+                          textAlign: 'left',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {selectedMember ? (
+                            <img src={getMemberProfileSrc(selectedMember)} alt="Member" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+                          ) : (
+                            <span style={{ fontWeight: '700', color: '#64748b' }}>👤</span>
+                          )}
+                        </div>
+                        <div style={{ flex: 1, color: selectedMember ? '#111827' : '#6b7280' }}>
+                          {selectedMember ? `${getMemberDisplayName(selectedMember)} (${selectedMember.CNIC})` : `-- Select ${pos.Name} --`}
+                        </div>
+                        <span style={{ marginLeft: 'auto', color: '#9ca3af' }}>{openRoleDropdown === pos.Name ? '▴' : '▾'}</span>
+                      </button>
+
+                      {openRoleDropdown === pos.Name && (
+                        <div style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 8px)',
+                          left: 0,
+                          right: 0,
+                          background: '#ffffff',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          boxShadow: '0 10px 30px rgba(15,23,42,0.12)',
+                          zIndex: 50,
+                          maxHeight: '240px',
+                          overflowY: 'auto'
+                        }} onClick={(e) => e.stopPropagation()}>
+                          <div style={{ padding: '6px' }}>
+                            {availableMembers.filter(member => !panelMemberCnics.has(member.CNIC) && member.CNIC !== user.cnic && !isMemberAssignedElsewhere(member, pos.Name)).map(member => (
+                              <div
+                                key={`opt-${pos.Name}-${member.CNIC}`}
+                                onClick={() => {
+                                  setRoleAssignments(prev => ({ ...prev, [pos.Name]: member.CNIC }));
+                                  setOpenRoleDropdown(null);
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  padding: '10px',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  transition: 'background-color 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f8fafc'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                              >
+                                <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {getMemberProfileSrc(member) ? (
+                                      <img src={getMemberProfileSrc(member)} alt="Member" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+                                  ) : (
+                                    <span style={{ fontWeight: '700', color: '#64748b' }}>{`${(member.FirstName || '').charAt(0)}${(member.LastName || '').charAt(0)}` || '👤'}</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 600, color: '#111827' }}>{getMemberDisplayName(member)}</div>
+                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{member.CNIC}</div>
+                                </div>
+                              </div>
+                            ))}
+                            {availableMembers.filter(member => !panelMemberCnics.has(member.CNIC) && member.CNIC !== user.cnic && !isMemberAssignedElsewhere(member, pos.Name)).length === 0 && (
+                              <div style={{ padding: '10px', color: '#6b7280' }}>No members available for selection.</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* ACTION BUTTONS */}

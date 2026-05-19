@@ -3,6 +3,7 @@ import './AdminDashboard.css';
 import logo from '../assets/logo.png';
 
 const ChooseNHC = ({ user, onSelect, onCancel }) => {
+  // Show only the councils attached to the current account.
   const options = user.nhcOptions || [];
   const [selectedNHC, setSelectedNHC] = useState("");
 
@@ -19,6 +20,7 @@ const ChooseNHC = ({ user, onSelect, onCancel }) => {
       className="admin-dashboard-container"
       style={{ textAlign: "center", padding: "40px 20px" }}
     >
+      {/* Simple chooser flow for users with more than one NHC. */}
       <img src={logo} alt="NHC Logo" style={{ width: 100, height: 'auto', marginBottom: 16 }} />
       <h2 style={{ fontSize: "24px", marginBottom: "30px" }}>Select Your Home NHC</h2>
 

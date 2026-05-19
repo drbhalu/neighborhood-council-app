@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPanels } from '../api';
 
 const ActiveCommittees = ({ user, onCreateNewCommittee, onOpenCommittee }) => {
+  // Show committees tied to the current user and council.
   const canCreateCommittee = String(user?.role || '') === 'President';
   const [panels, setPanels] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -92,6 +93,7 @@ const ActiveCommittees = ({ user, onCreateNewCommittee, onOpenCommittee }) => {
 
   return (
     <div style={{ paddingBottom: '12px' }}>
+      {/* Committee list, empty state, and create-button entry point. */}
       {groupedCommittees.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '18px' }}>
           {groupedCommittees.map((panel) => (

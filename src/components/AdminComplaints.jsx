@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getAllComplaints, getComplaintHistory, getComplaintsByUser } from '../api';
 
 const AdminComplaints = ({ user, onClose }) => {
+  // Admin view for browsing complaints and drilling into one complaint at a time.
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -85,6 +86,7 @@ const AdminComplaints = ({ user, onClose }) => {
         borderRadius: '12px',
         padding: '20px'
       }}>
+        {/* Header and close button for the complaints browser. */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <h2 style={{ margin: 0 }}>All Complaints</h2>
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '24px', cursor: 'pointer' }}>✕</button>

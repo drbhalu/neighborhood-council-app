@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { getBudgetRequests, getComplaintHistory, getBudgetStats, getBudgetAvailable, getBudgetHistory, releaseBudget, rejectBudget } from '../api';
+import { getBudgetRequests, getComplaintHistory, getBudgetStats, getBudgetAvailable, getBudgetHistory, releaseBudget, rejectBudget, getCommitteeSettings } from '../api';
 
 const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
+  // Treasurer workspace state for reviewing, allocating, and tracking budget requests.
   const [budgetRequests, setBudgetRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -26,6 +27,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   const totalBudgetAvailable = typeof stats.totalBudgetAvailable === 'number'
     ? stats.totalBudgetAvailable
     : Math.max(0, stats.totalAllocatedAmount - stats.totalReleasedAmount);
+  // Tabs switch between request queues and the treasurer history view.
   const [viewMode, setViewMode] = useState('approved');
   const [allocatedAmount, setAllocatedAmount] = useState('');
   const [allocationError, setAllocationError] = useState('');
@@ -35,6 +37,8 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [enableUrgentWorkflow, setEnableUrgentWorkflow] = useState(true);
+  const [urgentAllocatedRequests, setUrgentAllocatedRequests] = useState([]);
 
   const containerStyle = {
     backgroundColor: '#f6f3fa',
@@ -159,13 +163,31 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   };
 
   useEffect(() => {
+    // Load all budget requests for the current NHC.
     const loadRequests = async () => {
       if (!nhcCode) return;
       try {
         setLoading(true);
         setError('');
-        const data = await getBudgetRequests(nhcCode);
-        setBudgetRequests(data || []);
+        const [data, settings] = await Promise.all([
+          getBudgetRequests(nhcCode),
+          getCommitteeSettings()
+        ]);
+        setEnableUrgentWorkflow(settings?.enableUrgentWorkflow !== false);
+        
+        let requests = data || [];
+        
+        // If urgent workflow is enabled, track urgent allocated requests
+        if (settings?.enableUrgentWorkflow) {
+          const urgentAllocated = requests.filter((r) => {
+            const isUrgent = isUrgentComplaint(r);
+            const isAllocated = String(r.BudgetAllocationStatus || '').toLowerCase() === 'allocated';
+            return isUrgent && isAllocated;
+          });
+          setUrgentAllocatedRequests(urgentAllocated);
+        }
+        
+        setBudgetRequests(requests);
       } catch (err) {
         setError('Failed to load budget requests: ' + err.message);
         setBudgetRequests([]);
@@ -177,6 +199,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   }, [nhcCode, refreshKey]);
 
   useEffect(() => {
+    // Load summary budget statistics used by the top cards.
     const loadStats = async () => {
       if (!nhcCode) return;
       try {
@@ -203,6 +226,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   }, [nhcCode, refreshKey]);
 
   useEffect(() => {
+    // Only fetch the budget history when the history tab is open.
     const loadBudgetHistory = async () => {
       if (!nhcCode || viewMode !== 'history' || !user?.cnic) return;
       try {
@@ -222,6 +246,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
 
   useEffect(() => {
     if (!selectedRequest) return;
+    // Pre-fill the release amount from the selected request details.
     const { amount } = parseBudgetDetails(selectedRequest.CommitteeRemarks);
     // Do not use BudgetCategory in treasurer screen anymore
     setAllocatedAmount(
@@ -233,6 +258,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   }, [selectedRequest]);
 
   useEffect(() => {
+    // Load the activity history for the currently selected request.
     const loadHistory = async () => {
       if (!selectedRequest?.Id || !user?.cnic) return;
       try {
@@ -250,6 +276,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   }, [selectedRequest?.Id, user?.cnic]);
 
   const parseBudgetDetails = (remarks) => {
+    // Extract budget amount and reason text from the committee remarks.
     if (!remarks) return { amount: '', reason: '' };
     const lines = String(remarks).split('\n\n');
     const amount = lines.find(l => l.includes('Budget Needed:'))?.replace('Budget Needed:', '').trim() || '';
@@ -257,7 +284,35 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
     return { amount, reason };
   };
 
+  const isUrgentComplaint = (record) => {
+    const value = String(record?.UrgentComplaint ?? record?.urgentComplaint ?? '').toLowerCase();
+    return value === '1' || value === 'true' || value === 'urgent';
+  };
+
+  const renderUrgencyBadge = (record) => {
+    if (!isUrgentComplaint(record)) return null;
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '4px 10px',
+          borderRadius: '999px',
+          backgroundColor: '#fee2e2',
+          color: '#991b1b',
+          fontSize: '12px',
+          fontWeight: '700',
+          marginLeft: '8px',
+        }}
+      >
+        URGENT
+      </span>
+    );
+  };
+
   const parseAmountValue = (amountString) => {
+    // Convert amount text like "PKR 5,000" into a numeric value.
     const parsed = parseFloat(String(amountString || '').replace(/[^0-9.]/g, ''));
     return Number.isFinite(parsed) ? parsed : 0;
   };
@@ -270,8 +325,16 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   const revisionRequests = budgetRequests.filter((request) => normalizeStatus(request.PresidentApprovalStatus) === 'revision-requested');
   const allocatedRequests = budgetRequests.filter((request) => normalizeStatus(request.BudgetAllocationStatus) === 'allocated');
   const releasedRequests = budgetRequests.filter((request) => normalizeStatus(request.BudgetAllocationStatus) === 'released');
+  const urgentRequests = budgetRequests.filter((request) => isUrgentComplaint(request));
+  const urgentPendingRequests = budgetRequests.filter((request) => {
+    const approval = normalizeStatus(request.PresidentApprovalStatus);
+    const allocation = normalizeStatus(request.BudgetAllocationStatus);
+    // urgent pending = marked urgent, approved by President, not yet allocated/released by Treasurer
+    return isUrgentComplaint(request) && approval === 'approved' && allocation === 'pending';
+  });
 
   const getFilteredRequests = () => {
+    // Apply the active tab filter to the loaded budget requests.
     return budgetRequests.filter((request) => {
       const approval = normalizeStatus(request.PresidentApprovalStatus);
       const allocation = normalizeStatus(request.BudgetAllocationStatus);
@@ -279,6 +342,8 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
       if (viewMode === 'approved') return approval === 'approved' && allocation === 'pending';
       if (viewMode === 'allocated') return allocation === 'allocated';
       if (viewMode === 'released') return allocation === 'released';
+      if (viewMode === 'urgent') return isUrgentComplaint(request);
+      if (viewMode === 'urgent-pending') return isUrgentComplaint(request) && approval === 'approved' && allocation === 'pending';
       if (viewMode === 'pending') return approval === 'pending';
       if (viewMode === 'rejected') return approval === 'rejected';
       if (viewMode === 'revision') return approval === 'revision-requested';
@@ -287,19 +352,23 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   };
 
   const renderRequestsList = (requests) => {
+    // Render the request cards or an empty state.
     if (requests.length === 0) {
       return (
         <div style={{ ...cardStyle, textAlign: 'center', color: '#64748b', padding: '30px' }}>
-          No budget requests found
+          {viewMode === 'urgent-pending' ? 'No urgent pending budget requests' : 'No budget requests found'}
         </div>
       );
     }
 
     return (
       <div>
-        {requests.map((request) => {
-          const budgetDetails = parseBudgetDetails(request.CommitteeRemarks);
-          const isSelected = selectedRequest?.Id === request.Id;
+        {requests
+          .slice()
+          .sort((a, b) => Number(isUrgentComplaint(b)) - Number(isUrgentComplaint(a)))
+          .map((request) => {
+            const budgetDetails = parseBudgetDetails(request.CommitteeRemarks);
+            const isSelected = selectedRequest?.Id === request.Id;
           
           return (
             <div
@@ -314,9 +383,12 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                 <div>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '700', color: '#111827' }}>
-                    {request.Category || 'Budget Request'}
-                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: '0', fontSize: '18px', fontWeight: '700', color: '#111827' }}>
+                      {request.Category || 'Budget Request'}
+                    </h3>
+                    {renderUrgencyBadge(request)}
+                  </div>
                   <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#475569', lineHeight: 1.5 }}>
                     {request.Description || 'No description'}
                   </p>
@@ -350,6 +422,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
   };
 
   const renderDetailView = () => {
+    // Show the selected request, allocation controls, and activity history.
     if (!selectedRequest) return null;
 
     const budgetDetails = parseBudgetDetails(selectedRequest.CommitteeRemarks);
@@ -358,7 +431,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
 
     return (
       <div style={{ ...cardStyle, marginTop: '20px', backgroundColor: '#ffffff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <button
             onClick={() => setSelectedRequest(null)}
             style={backButtonStyle}
@@ -369,6 +442,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
           <h2 style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: '#111827' }}>
             Budget Request Details
           </h2>
+          {renderUrgencyBadge(selectedRequest)}
         </div>
 
         <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '12px', marginBottom: '16px' }}>
@@ -447,6 +521,15 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
                 </div>
                 <button
                   onClick={async () => {
+                    // Urgent-first enforcement: block releasing non-urgent if urgent allocated exist
+                    try {
+                      if (enableUrgentWorkflow && urgentAllocatedRequests.length > 0 && !isUrgentComplaint(selectedRequest)) {
+                        alert('Please release urgent allocations before others.');
+                        return;
+                      }
+                    } catch (err) {}
+
+                    // Release already-allocated funds back to the committee.
                     try {
                       setIsReleasing(true);
                       await releaseBudget(selectedRequest.Id, user.cnic);
@@ -499,28 +582,37 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
                   </button>
                   <button
                     onClick={async () => {
-                      const amount = parseFloat(allocatedAmount);
-                      if (!amount || amount <= 0) {
-                        setAllocationError('Please enter a valid budget amount.');
-                        return;
-                      }
-                      if (amount > totalBudgetAvailable) {
-                        setAllocationError(`Allocated amount (PKR ${amount.toFixed(2)}) exceeds available budget (PKR ${totalBudgetAvailable.toFixed(2)}).`);
-                        return;
-                      }
-                      try {
-                        setAllocationError('');
-                        setIsAllocating(true);
-                        // Release budget without category
-                        await releaseBudget(selectedRequest.Id, user.cnic, amount);
-                        setError('');
-                        setSelectedRequest(null);
-                        setRefreshKey((prev) => prev + 1);
-                      } catch (err) {
-                        setAllocationError(err.message);
-                      } finally {
-                        setIsAllocating(false);
-                      }
+                        // Urgent-first enforcement: block releasing non-urgent if urgent allocated exist
+                        try {
+                          if (enableUrgentWorkflow && urgentAllocatedRequests.length > 0 && !isUrgentComplaint(selectedRequest)) {
+                            alert('Please release urgent allocations before others.');
+                            return;
+                          }
+                        } catch (err) {}
+
+                        // Validate the requested amount before releasing funds.
+                        const amount = parseFloat(allocatedAmount);
+                        if (!amount || amount <= 0) {
+                          setAllocationError('Please enter a valid budget amount.');
+                          return;
+                        }
+                        if (amount > totalBudgetAvailable) {
+                          setAllocationError(`Allocated amount (PKR ${amount.toFixed(2)}) exceeds available budget (PKR ${totalBudgetAvailable.toFixed(2)}).`);
+                          return;
+                        }
+                        try {
+                          setAllocationError('');
+                          setIsAllocating(true);
+                          // Release budget without category
+                          await releaseBudget(selectedRequest.Id, user.cnic, amount);
+                          setError('');
+                          setSelectedRequest(null);
+                          setRefreshKey((prev) => prev + 1);
+                        } catch (err) {
+                          setAllocationError(err.message);
+                        } finally {
+                          setIsAllocating(false);
+                        }
                     }}
                     style={{ ...primaryButtonStyle, flex: 1, minWidth: '120px' }}
                     disabled={isAllocating}
@@ -568,6 +660,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
               </button>
               <button
                 onClick={async () => {
+                  // Persist the rejection with a clear reason.
                   if (!rejectionReason.trim()) {
                     alert('Please provide a rejection reason.');
                     return;
@@ -660,7 +753,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
 
   return (
     <div style={containerStyle}>
-      {/* Header */}
+      {/* Header and page title. */}
       <div style={headerStyle}>
         <button onClick={onBack} style={backButtonStyle} title="Back to dashboard">
           ←
@@ -668,7 +761,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
         <h1 style={titleStyle}>Budget Review</h1>
       </div>
 
-      {/* Error */}
+      {/* Inline error banner for failed fetches or actions. */}
       {error && (
         <div style={{ ...cardStyle, backgroundColor: '#fee2e2', color: '#991b1b', marginBottom: '16px', border: '1px solid #fecaca' }}>
           {error}
@@ -679,18 +772,17 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
         <button style={tabStyle(viewMode === 'approved')} onClick={() => setViewMode('approved')}>
           Approved ({approvedRequests.filter((request) => normalizeStatus(request.BudgetAllocationStatus) === 'pending').length})
         </button>
-        <button style={tabStyle(viewMode === 'history')} onClick={() => {
-          setViewMode('history');
-          setSelectedRequest(null);
-        }}>
-          History ({budgetHistory.length})
-        </button>
-        {/*
         <button style={tabStyle(viewMode === 'allocated')} onClick={() => setViewMode('allocated')}>
           Allocated ({allocatedRequests.length})
         </button>
         <button style={tabStyle(viewMode === 'released')} onClick={() => setViewMode('released')}>
           Released ({releasedRequests.length})
+        </button>
+        <button style={tabStyle(viewMode === 'urgent')} onClick={() => setViewMode('urgent')}>
+          Urgent ({urgentRequests.length})
+        </button>
+        <button style={tabStyle(viewMode === 'urgent-pending')} onClick={() => setViewMode('urgent-pending')}>
+          Urgent Pending ({urgentPendingRequests.length})
         </button>
         <button style={tabStyle(viewMode === 'pending')} onClick={() => setViewMode('pending')}>
           Pending President ({pendingRequests.length})
@@ -701,8 +793,23 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
         <button style={tabStyle(viewMode === 'revision')} onClick={() => setViewMode('revision')}>
           Changes Requested ({revisionRequests.length})
         </button>
-        */}
       </div>
+
+      {/* URGENT WORKFLOW ALERT */}
+      {enableUrgentWorkflow && urgentAllocatedRequests.length > 0 && viewMode !== 'allocated' && viewMode !== 'urgent' && (
+        <div style={{
+          backgroundColor: '#fee2e2',
+          border: '2px solid #dc2626',
+          color: '#991b1b',
+          padding: '16px',
+          borderRadius: '8px',
+          marginBottom: '16px',
+          fontSize: '15px',
+          fontWeight: 'bold'
+        }}>
+          ⚠️ <strong>{urgentAllocatedRequests.length} URGENT budget release(s) need to be processed first!</strong> Please release urgent allocations before others.
+        </div>
+      )}
 
       {!loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
@@ -749,20 +856,22 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
       )}
       */}
 
-      {/* Loading */}
+      {/* Loading state while the budget queue is being fetched. */}
       {loading && (
         <div style={{ ...cardStyle, textAlign: 'center', color: '#64748b', padding: '30px' }}>
           Loading budget requests...
         </div>
       )}
 
-      {/* Content */}
+      {/* Main content switches between list, history, and detail views. */}
       {!loading && !selectedRequest && viewMode !== 'history' && (
         <div>
           <h2 style={{ margin: '0 0 12px 0', fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
             {viewMode === 'approved' ? 'Approved Requests Awaiting Allocation' :
              viewMode === 'allocated' ? 'Allocated Budget Requests' :
              viewMode === 'released' ? 'Released Budget Requests' :
+             viewMode === 'urgent' ? 'Urgent Budget Requests' :
+             viewMode === 'urgent-pending' ? 'Urgent Pending Budget Requests' :
              viewMode === 'pending' ? 'Pending President Review' :
              viewMode === 'rejected' ? 'Rejected Requests' :
              viewMode === 'revision' ? 'Requests Needing Changes' : 'Budget Requests'}
@@ -823,7 +932,7 @@ const TreasurerBudgetManagement = ({ user, nhcCode, onBack }) => {
         </div>
       )}
 
-      {/* Detail View */}
+      {/* Selected request detail view. */}
       {selectedRequest && renderDetailView()}
 
       {/* Empty State */}

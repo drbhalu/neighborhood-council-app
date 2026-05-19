@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { getPastElectionResults, getNHCList } from '../api';
 
 const PastElectionResults = ({ user, onBack }) => {
+  // Past-election results for the member's council.
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  const getProfileImageUrl = (person) => person?.profileImage || person?.ProfileImage || null;
 
   useEffect(() => {
     const loadResults = async () => {
@@ -15,7 +18,7 @@ const PastElectionResults = ({ user, onBack }) => {
           return;
         }
 
-        // Resolve nhcId: prefer explicit nhcId, otherwise try to resolve from nhcCode
+        // Resolve the council ID from the current user context.
         let nhcId = user.nhcId;
         if (!nhcId && user.nhcCode) {
           try {
@@ -163,8 +166,8 @@ const PastElectionResults = ({ user, onBack }) => {
 
         {/* RESULTS BY ELECTION -> POSITION - SHOW WINNER NAME & VOTES */}
         {results && Object.keys(results).length > 0 ? (
-          // New API shape: { electionId: { electionStartDate, electionEndDate, positions: { positionName: [candidates] } } }
-          // Backward-compat: { positionName: [candidates] }
+            // New API shape: { electionId: { electionStartDate, electionEndDate, positions: { positionName: [candidates] } } }
+            // Backward-compat: { positionName: [candidates] }
           Object.entries(results).map(([key, value]) => {
             // Detect new shape
             if (value && value.positions) {
@@ -200,22 +203,35 @@ const PastElectionResults = ({ user, onBack }) => {
                           </p>
                           {winner ? (
                             <div>
-                              <p style={{
-                                fontSize: '24px',
-                                fontWeight: 'bold',
-                                color: positionName === 'President' ? '#1d4ed8' : positionName === 'Treasurer' ? '#6d28d9' : '#059669',
-                                margin: '0 0 8px 0'
-                              }}>
-                                🏆 {winner.FirstName} {winner.LastName}
-                              </p>
-                              <p style={{
-                                fontSize: '16px',
-                                fontWeight: 'bold',
-                                color: positionName === 'President' ? '#2563eb' : positionName === 'Treasurer' ? '#7c3aed' : '#10b981',
-                                margin: '0 0 12px 0'
-                              }}>
-                                {winner.TotalVotes} Votes
-                              </p>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', marginBottom: '12px' }}>
+                                <div style={{ width: '72px', height: '72px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {getProfileImageUrl(winner) ? (
+                                    <img src={getProfileImageUrl(winner)} alt="winner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    <span style={{ fontSize: '24px', fontWeight: '700', color: '#64748b' }}>
+                                      {`${(winner.FirstName || '').charAt(0)}${(winner.LastName || '').charAt(0)}` || '👤'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div>
+                                  <p style={{
+                                    fontSize: '24px',
+                                    fontWeight: 'bold',
+                                    color: positionName === 'President' ? '#1d4ed8' : positionName === 'Treasurer' ? '#6d28d9' : '#059669',
+                                    margin: '0 0 8px 0'
+                                  }}>
+                                    🏆 {winner.FirstName} {winner.LastName}
+                                  </p>
+                                  <p style={{
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                    color: positionName === 'President' ? '#2563eb' : positionName === 'Treasurer' ? '#7c3aed' : '#10b981',
+                                    margin: '0 0 12px 0'
+                                  }}>
+                                    {winner.TotalVotes} Votes
+                                  </p>
+                                </div>
+                              </div>
                               {winner.PanelMembers && winner.PanelMembers.length > 0 && (
                                 <div style={{
                                   backgroundColor: 'rgba(255,255,255,0.7)',
@@ -242,9 +258,20 @@ const PastElectionResults = ({ user, onBack }) => {
                                       borderBottom: '1px solid rgba(0,0,0,0.1)',
                                       fontSize: '12px'
                                     }}>
-                                      <span style={{ fontWeight: '500' }}>
-                                        {member.FirstName} {member.LastName}
-                                      </span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                          {getProfileImageUrl(member) ? (
+                                            <img src={getProfileImageUrl(member)} alt="member" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                          ) : (
+                                            <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                                              {`${(member.FirstName || '').charAt(0)}${(member.LastName || '').charAt(0)}` || '👤'}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span style={{ fontWeight: '500' }}>
+                                          {member.FirstName} {member.LastName}
+                                        </span>
+                                      </div>
                                       <span style={{
                                         fontSize: '11px',
                                         backgroundColor: member.Role === 'president' ? '#dbeafe' : member.Role === 'treasurer' ? '#ddd6fe' : '#dcfce7',
@@ -296,22 +323,35 @@ const PastElectionResults = ({ user, onBack }) => {
                   
                   {winner ? (
                     <div>
-                      <p style={{
-                        fontSize: '28px',
-                        fontWeight: 'bold',
-                        color: positionName === 'President' ? '#1d4ed8' : positionName === 'Treasurer' ? '#6d28d9' : '#059669',
-                        margin: '0 0 8px 0'
-                      }}>
-                        🏆 {winner.FirstName} {winner.LastName}
-                      </p>
-                      <p style={{
-                        fontSize: '18px',
-                        fontWeight: 'bold',
-                        color: positionName === 'President' ? '#2563eb' : positionName === 'Treasurer' ? '#7c3aed' : '#10b981',
-                        margin: '0 0 12px 0'
-                      }}>
-                        {winner.TotalVotes} Votes
-                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', marginBottom: '12px' }}>
+                        <div style={{ width: '72px', height: '72px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {getProfileImageUrl(winner) ? (
+                            <img src={getProfileImageUrl(winner)} alt="winner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{ fontSize: '24px', fontWeight: '700', color: '#64748b' }}>
+                              {`${(winner.FirstName || '').charAt(0)}${(winner.LastName || '').charAt(0)}` || '👤'}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p style={{
+                            fontSize: '28px',
+                            fontWeight: 'bold',
+                            color: positionName === 'President' ? '#1d4ed8' : positionName === 'Treasurer' ? '#6d28d9' : '#059669',
+                            margin: '0 0 8px 0'
+                          }}>
+                            🏆 {winner.FirstName} {winner.LastName}
+                          </p>
+                          <p style={{
+                            fontSize: '18px',
+                            fontWeight: 'bold',
+                            color: positionName === 'President' ? '#2563eb' : positionName === 'Treasurer' ? '#7c3aed' : '#10b981',
+                            margin: '0 0 12px 0'
+                          }}>
+                            {winner.TotalVotes} Votes
+                          </p>
+                        </div>
+                      </div>
                       {winner.PanelMembers && winner.PanelMembers.length > 0 && (
                         <div style={{
                           backgroundColor: 'rgba(255,255,255,0.7)',
@@ -338,9 +378,20 @@ const PastElectionResults = ({ user, onBack }) => {
                               borderBottom: '1px solid rgba(0,0,0,0.1)',
                               fontSize: '12px'
                             }}>
-                              <span style={{ fontWeight: '500' }}>
-                                {member.FirstName} {member.LastName}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: '26px', height: '26px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {getProfileImageUrl(member) ? (
+                                    <img src={getProfileImageUrl(member)} alt="member" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                                      {`${(member.FirstName || '').charAt(0)}${(member.LastName || '').charAt(0)}` || '👤'}
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ fontWeight: '500' }}>
+                                  {member.FirstName} {member.LastName}
+                                </span>
+                              </div>
                               <span style={{
                                 fontSize: '11px',
                                 backgroundColor: member.Role === 'president' ? '#dbeafe' : member.Role === 'treasurer' ? '#ddd6fe' : '#dcfce7',

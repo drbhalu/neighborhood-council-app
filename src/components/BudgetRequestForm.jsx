@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { sendNotification, getAllUsers, getNHCList } from '../api';
 
 const BudgetRequestForm = ({ user, nhcId, committeeId, onClose }) => {
+  // Keep the budget request fields local to this modal.
   const [value, setValue] = useState('');
   const [description, setDescription] = useState('');
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [loading, setLoading] = useState(false);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!value || !description || !accountName || !accountNumber) {
@@ -17,7 +17,7 @@ const BudgetRequestForm = ({ user, nhcId, committeeId, onClose }) => {
 
     setLoading(true);
     try {
-      // Get all users and NHC list
+      // Look up the current NHC and its members so the notification reaches the right audience.
       const allUsers = await getAllUsers();
       const nhcList = await getNHCList();
       const nhc = nhcList.find(n => n.id === nhcId);
@@ -27,7 +27,7 @@ const BudgetRequestForm = ({ user, nhcId, committeeId, onClose }) => {
       console.log('Found NHC:', nhc);
       console.log('nhcCode:', nhcCode);
       
-      // Filter users in this NHC
+      // Limit recipients to users in the selected NHC.
       const nhcMembers = allUsers.filter(u => u.NHC_Code && nhcCode && u.NHC_Code.split(', ').includes(nhcCode));
       
       console.log('All users:', allUsers.length);
@@ -35,7 +35,7 @@ const BudgetRequestForm = ({ user, nhcId, committeeId, onClose }) => {
       
       const message = `Community request from ${user.firstName} ${user.lastName} (${user.cnic}):\nAmount: ${value}\nPurpose: ${description}\nAccount: ${accountName}\nAccount Number: ${accountNumber}`;
 
-      // Send notification to each NHC member with NHC_Code
+      // Send the budget request to each council member.
       for (const member of nhcMembers) {
         await sendNotification({ recipientCnic: member.CNIC, message, nhcCode });
       }
@@ -74,10 +74,11 @@ const BudgetRequestForm = ({ user, nhcId, committeeId, onClose }) => {
           maxWidth: '90%',
         }}
       >
-        <h2>Request Budget</h2>
+        {/* Modal title and budget request form. */}
+        <h2>Rise Money</h2>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '10px' }}>
-            <label>Value of Request:</label>
+            <label>Amount:</label>
             <input
               type="number"
               value={value}
@@ -115,7 +116,7 @@ const BudgetRequestForm = ({ user, nhcId, committeeId, onClose }) => {
               type="text"
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value)}
-              placeholder="Enter account number"
+              placeholder=""
               required
               style={{ width: '100%', padding: '8px', marginTop: '5px' }}
             />

@@ -4,6 +4,7 @@ import { loginUser } from '../api';
 import logo from '../assets/logo.png';
 
 const Login = ({ onLoginSuccess, onSwitchToSignup }) => {
+  // Keep the login form state local to this screen.
   const [formData, setFormData] = useState({
     cnic: '',
     password: ''
@@ -38,6 +39,7 @@ const Login = ({ onLoginSuccess, onSwitchToSignup }) => {
     <div className="signup-container" style={{ maxWidth: '450px', padding: '40px 20px' }}>
       <div className="signup-content" style={{ textAlign: 'center' }}>
 
+        {/* Brand mark and page title. */}
         <img 
           src={logo} 
           alt="Logo" 

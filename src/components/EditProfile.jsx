@@ -3,6 +3,7 @@ import './SignUp.css';
 import { updateUser, uploadProfilePicture } from '../api';
 
 const EditProfile = ({ user, onSave, onCancel }) => {
+  // Editable profile fields for the signed-in member.
   const [formData, setFormData] = useState({
     firstName: user.firstName,
     lastName: user.lastName,
@@ -56,7 +57,7 @@ const EditProfile = ({ user, onSave, onCancel }) => {
     try {
       let finalFormData = { ...formData };
       
-      // Upload image if a new file was selected
+      // Upload a new profile image only when the user picked one.
       if (selectedFile) {
         setIsUploading(true);
         const uploadResponse = await uploadProfilePicture(formData.cnic, selectedFile);
@@ -67,7 +68,7 @@ const EditProfile = ({ user, onSave, onCancel }) => {
         delete finalFormData.profileImage;
       }
       
-      // Update user data (only non-image fields if no new image)
+      // Persist the profile fields and then notify the parent view.
       await updateUser(formData.cnic, finalFormData);
       onSave(finalFormData);
       alert('Profile updated successfully!');
@@ -94,7 +95,7 @@ const EditProfile = ({ user, onSave, onCancel }) => {
       try {
         await updateUser(formData.cnic, updated);
         setFormData(updated);
-        // notify parent of updated data (mark as already saved)
+        // Notify the parent after saving the new address.
         onSave({ ...updated, _saved: true });
         alert('Address updated');
       } catch (err) {
@@ -112,7 +113,7 @@ const EditProfile = ({ user, onSave, onCancel }) => {
       </div>
       
       <form onSubmit={handleSubmit} className="signup-form">
-        {/* PROFILE PICTURE PREVIEW */}
+        {/* Profile picture preview and upload control. */}
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{
             width: '100px', height: '100px', borderRadius: '50%',

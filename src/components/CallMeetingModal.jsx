@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { scheduleCommitteeMeeting } from '../api';
 
 const CallMeetingModal = ({ committee, user, onClose }) => {
+  // Modal state for scheduling a committee meeting.
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [reason, setReason] = useState('');
@@ -10,8 +11,10 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
 
   const committeeName = committee?.PanelName || committee?.name || `Committee ${committee?.Id || committee?.id || ''}`;
   const panelId = committee?.Id || committee?.id;
+  const complaintId = committee?.ComplaintId || committee?.complaintId;
 
   const handleScheduleMeeting = async () => {
+    // Validate inputs and send the meeting schedule to the backend.
     console.log('🔵 Modal handleScheduleMeeting called');
     console.log('🔵 Committee object:', committee);
     console.log('🔵 User object:', user);
@@ -42,6 +45,7 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
       
       await scheduleCommitteeMeeting({
         panelId,
+        complaintId,
         meetingDate: date,
         meetingTime: time,
         reason: reason.trim(),
@@ -61,6 +65,7 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
+        {/* Header and close action for the scheduling modal. */}
         <div style={styles.header}>
           <h2 style={styles.title}>Call Meeting</h2>
           <button onClick={onClose} style={styles.closeButton}>
@@ -68,12 +73,13 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
           </button>
         </div>
 
-        
+        {/* Read-only committee name context. */}
         <div style={styles.fieldGroup}>
           <label style={styles.label}>Committee</label>
           <div style={styles.textBox}>{committeeName}</div>
         </div>
 
+        {/* Date picker for the meeting. */}
         <div style={styles.fieldGroup}>
           <label style={styles.label}>Meeting Date</label>
           <input
@@ -84,6 +90,7 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
           />
         </div>
 
+        {/* Time picker for the meeting. */}
         <div style={styles.fieldGroup}>
           <label style={styles.label}>Meeting Time</label>
           <input
@@ -94,6 +101,7 @@ const CallMeetingModal = ({ committee, user, onClose }) => {
           />
         </div>
 
+        {/* Reason field explains why the meeting is needed. */}
         <div style={styles.fieldGroup}>
           <label style={styles.label}>Meeting Reason</label>
           <textarea

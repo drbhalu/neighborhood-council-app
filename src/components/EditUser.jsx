@@ -3,6 +3,7 @@ import './SignUp.css';
 import { updateUser } from '../api';
 
 const EditUser = ({ user, onBack, onSave }) => {
+  // Admin editing form for an existing user record.
   const [formData, setFormData] = useState({
     firstName: user.FirstName || '',
     lastName: user.LastName || '',
@@ -24,6 +25,7 @@ const EditUser = ({ user, onBack, onSave }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Save only the editable user fields back to the server.
     setIsSaving(true);
     try {
       const updatedData = {
@@ -49,8 +51,7 @@ const EditUser = ({ user, onBack, onSave }) => {
 
   return (
     <div className="admin-dashboard-container">
-      
-     
+      {/* Header and editing form for the selected user. */}
        <div></div>
          <br></br>
          <div></div>

@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { getNHCMembersByCode, submitComplaint, checkNHCHasPanel } from '../api';
 
 const FileComplaint = ({ user, onClose, onSuccess }) => {
+  // Complaint form state is kept local so the modal can reset independently.
   const [category, setCategory] = useState('');
   const [complaintType, setComplaintType] = useState('normal');
+  const [isPublicComplaint, setIsPublicComplaint] = useState(false);
+  const [isUrgentComplaint, setIsUrgentComplaint] = useState(false);
   const [againstMemberCnic, setAgainstMemberCnic] = useState('');
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -17,6 +20,7 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
 
   // Check if NHC has an assigned panel
   useEffect(() => {
+    // Complaints can only be filed when the NHC already has a panel.
     const checkPanel = async () => {
       // Check if nhcId is valid (must be a positive number)
       if (typeof user?.nhcId !== 'number' || user.nhcId <= 0) {
@@ -38,6 +42,7 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
   }, [user?.nhcId]);
 
   useEffect(() => {
+    // Populate the against-member dropdown only when that complaint type is selected.
     const loadMembers = async () => {
       if (complaintType !== 'against' || !user?.nhcCode) return;
       setMembersLoading(true);
@@ -100,6 +105,8 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
       formData.append('description', description);
       formData.append('hasBudget', 0);
       formData.append('complaintType', complaintType);
+      formData.append('publicComplaint', isPublicComplaint ? '1' : '0');
+      formData.append('urgentComplaint', isUrgentComplaint ? '1' : '0');
       if (complaintType === 'against') {
         formData.append('againstMemberCnic', againstMemberCnic);
         formData.append('againstMemberName', againstMember ? `${againstMember.FirstName || ''} ${againstMember.LastName || ''}`.trim() : '');
@@ -145,7 +152,7 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
         overflowY: 'auto',
         boxShadow: 'none'
       }}>
-        {/* HEADER */}
+        {/* Header and close action for the complaint form. */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -169,7 +176,7 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
           </button>
         </div>
 
-        {/* PANEL CHECK MESSAGE */}
+        {/* Explain why the complaint form may be unavailable. */}
         {checkingPanel ? (
           <div style={{
             backgroundColor: '#fef3c7',
@@ -200,7 +207,7 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
           </div>
         ) : null}
 
-        {/* USER INFO */}
+        {/* Show the identity being used for this submission. */}
         <div style={{
           backgroundColor: '#f0f9ff',
           padding: '16px',
@@ -216,7 +223,7 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
           </div>
         </div>
 
-        {/* ERROR MESSAGE */}
+        {/* Display validation or submission errors here. */}
         {error && (
           <div style={{
             backgroundColor: '#fee2e2',
@@ -231,9 +238,9 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
           </div>
         )}
 
-        {/* FORM */}
+        {/* Main complaint form. */}
         <form onSubmit={handleSubmit}>
-          {/* CATEGORY DROPDOWN */}
+          {/* Complaint type selection drives the rest of the form. */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{
               display: 'block',
@@ -264,8 +271,55 @@ const FileComplaint = ({ user, onClose, onSuccess }) => {
             >
               <option value="normal">Normal</option>
               <option value="against">Against Member</option>
+              
             </select>
           </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#1f2937',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={isPublicComplaint}
+                onChange={(e) => setIsPublicComplaint(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              Open Complaint
+            </label>
+            <p style={{ margin: '8px 0 0 26px', fontSize: '12px', color: '#64748b', lineHeight: 1.5 }}>
+              Send this complaint to every member in your NHC and mark the hearing as public.
+            </p>
+          </div>
+
+          {/* <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#1f2937',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={isUrgentComplaint}
+                onChange={(e) => setIsUrgentComplaint(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              Urgent Complaint
+            </label>
+            <p style={{ margin: '8px 0 0 26px', fontSize: '12px', color: '#64748b', lineHeight: 1.5 }}>
+              Mark this complaint as urgent so the president can review it immediately.
+            </p>
+          </div> */}
 
           <div style={{ marginBottom: '20px' }}>
             <label style={{

@@ -4,6 +4,7 @@ import { getNHCList, getElections, deleteElectionDate } from '../api';
 import logo from '../assets/logo.png';
 
 const EndElection = ({ onBack }) => {
+  // Manual election shutdown screen for admins.
   const [nhcList, setNhcList] = useState([]);
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,7 @@ const EndElection = ({ onBack }) => {
   };
 
   const handleEndElection = async (nhcId, nhcName) => {
+    // Remove the current election schedule immediately.
     const confirm = window.confirm(
       `Are you sure you want to END the election for "${nhcName}" immediately?`
     );
@@ -41,8 +43,11 @@ const EndElection = ({ onBack }) => {
     setIsEnding(true);
     try {
       await deleteElectionDate(nhcId);
+
       alert(`Election ended for "${nhcName}"!`);
       
+
+
       // Refetch elections to update the list
       const electionsData = await getElections();
       setElections(electionsData || []);
@@ -56,7 +61,7 @@ const EndElection = ({ onBack }) => {
 
   return (
     <div className="admin-dashboard-container">
-      {/* HEADER */}
+      {/* Header for ending election windows. */}
       <div className="dashboard-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <img src={logo} alt="Logo" style={{ height: '100px', width: 'auto' }} />
@@ -70,7 +75,7 @@ const EndElection = ({ onBack }) => {
         <div></div>
       </div>
 
-      {/* CONTENT */}
+      {/* List of active election schedules. */}
       <div style={{ padding: '30px 20px', width: '100%' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>

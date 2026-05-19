@@ -1,66 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { getCandidates, supportCandidate, getNominations, getSupportHistory } from '../api';
+import { getCandidates, supportCandidate, withdrawSupport, getNominations } from '../api';
 
 const NominationInfo = ({ user, onBack }) => {
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [supportingId, setSupportingId] = useState(null);
+  const [withdrawingId, setWithdrawingId] = useState(null);
   const [nominationOpen, setNominationOpen] = useState(false);
-  const [nominationStartDate, setNominationStartDate] = useState(null);
-  const [nominationEndDate, setNominationEndDate] = useState(null);
-  const [supportHistory, setSupportHistory] = useState([]);
-  const [showSupportList, setShowSupportList] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        if (user.nhcId) {
-          // Load candidates
-          const data = await getCandidates(user.nhcId, user.cnic);
-          setCandidates(data || []);
-
-          // Load nomination dates for this specific NHC only
-          const nominations = await getNominations(user.nhcId);
-          const record = (nominations || [])[0]; // Backend now returns only this NHC's nominations
-          
-          if (record && record.NominationStartDate && record.NominationEndDate) {
-            // Parse DATE from DB string "YYYY-MM-DD" safely as local date
-            const startDateStr = String(record.NominationStartDate).split('T')[0];
-            const endDateStr = String(record.NominationEndDate).split('T')[0];
-            
-            const [startYear, startMonth, startDay] = startDateStr.split('-').map(Number);
-            const [endYear, endMonth, endDay] = endDateStr.split('-').map(Number);
-            
-            const startDate = new Date(startYear, startMonth - 1, startDay);
-            const endDate = new Date(endYear, endMonth - 1, endDay);
-            const today = new Date();
-            
-            // Check if today is within the range (inclusive)
-            const isWithinRange = today >= startDate && today <= endDate;
-            
-            if (isWithinRange) {
-              setNominationOpen(true);
-            } else {
-              setNominationOpen(false);
-            }
-            setNominationStartDate(record.NominationStartDate);
-            setNominationEndDate(record.NominationEndDate);
-          } else {
-            setNominationOpen(false);
-            setNominationStartDate(null);
-            setNominationEndDate(null);
-          }
-
-          // Load support history for current nomination
-          try {
-            const supportData = await getSupportHistory(user.nhcId);
-            setSupportHistory(supportData || []);
-          } catch (err) {
-            console.error('Failed to load support history', err);
-            setSupportHistory([]);
-          }
-        } else {
+        if (!user?.nhcId) {
           setCandidates([]);
+          setNominationOpen(false);
+          return;
+        }
+
+        const data = await getCandidates(user.nhcId, user.cnic);
+        setCandidates(data || []);
+
+        const nominations = await getNominations(user.nhcId);
+        const record = (nominations || [])[0];
+
+        if (record?.NominationStartDate && record?.NominationEndDate) {
+          const startDateStr = String(record.NominationStartDate).split('T')[0];
+          const endDateStr = String(record.NominationEndDate).split('T')[0];
+          const [startYear, startMonth, startDay] = startDateStr.split('-').map(Number);
+          const [endYear, endMonth, endDay] = endDateStr.split('-').map(Number);
+          const startDate = new Date(startYear, startMonth - 1, startDay);
+          const endDate = new Date(endYear, endMonth - 1, endDay);
+          const today = new Date();
+          setNominationOpen(today >= startDate && today <= endDate);
+        } else {
           setNominationOpen(false);
         }
       } catch (err) {
@@ -71,6 +43,7 @@ const NominationInfo = ({ user, onBack }) => {
         setLoading(false);
       }
     };
+
     loadData();
   }, [user]);
 
@@ -79,7 +52,7 @@ const NominationInfo = ({ user, onBack }) => {
       alert('Nominations are closed. You cannot support candidates at this time.');
       return;
     }
-    
+
     if (supportingId) return;
     setSupportingId(candidateId);
     try {
@@ -91,6 +64,31 @@ const NominationInfo = ({ user, onBack }) => {
       alert('Failed to support: ' + (err.message || 'Unknown'));
     } finally {
       setSupportingId(null);
+    }
+  };
+
+  const handleWithdraw = async (candidateId) => {
+    if (withdrawingId) return;
+    setWithdrawingId(candidateId);
+    try {
+      console.log('Withdraw requested:', { candidateId, userCnic: user?.cnic });
+      const response = await withdrawSupport(candidateId, user.cnic);
+      console.log('Withdraw response:', response);
+      const data = await getCandidates(user.nhcId, user.cnic);
+      setCandidates(data || []);
+      
+      // Show appropriate message based on cascade delete behavior
+      if (response.cascadeDeleted) {
+        alert('All panel members have been withdrawn');
+      } else {
+        alert('Support withdrawn successfully');
+      }
+    } catch (err) {
+      console.error(err);
+      console.error('Withdraw failed details:', err);
+      alert('Failed to withdraw support: ' + (err.message || 'Unknown'));
+    } finally {
+      setWithdrawingId(null);
     }
   };
 
@@ -117,7 +115,6 @@ const NominationInfo = ({ user, onBack }) => {
         overflowY: 'auto',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
-        {/* HEADER */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -139,7 +136,6 @@ const NominationInfo = ({ user, onBack }) => {
           </button>
         </div>
 
-        {/* CONTENT */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
             <p>Loading candidates...</p>
@@ -183,12 +179,11 @@ const NominationInfo = ({ user, onBack }) => {
                 borderRadius: '12px',
                 padding: '20px',
               }}>
-                {/* Panel Members Section */}
                 <div style={{ marginBottom: '16px' }}>
                   <p style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
                     👥 Panel Members:
                   </p>
-                  {candidate.PanelMembers && candidate.PanelMembers.length > 0 ? (
+                      {candidate.PanelMembers && candidate.PanelMembers.length > 0 ? (
                     <div>
                       {candidate.PanelMembers.map((member, idx) => (
                         <div key={member.CNIC} style={{
@@ -198,33 +193,77 @@ const NominationInfo = ({ user, onBack }) => {
                           justifyContent: 'space-between',
                           alignItems: 'center'
                         }}>
-                          <div>
-                            <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                              {member.FirstName && member.LastName ? `${member.FirstName} ${member.LastName}` : member.CNIC}
-                            </span>
-                            <span style={{ marginLeft: '8px', fontSize: '13px', color: '#6b7280' }}>
-                              ({member.CNIC})
-                            </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {member.profileImage || member.ProfileImage ? (
+                                <img src={member.profileImage || member.ProfileImage} alt="member" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <span style={{ fontSize: 14, fontWeight: '700', color: '#64748b' }}>{`${(member.FirstName||'').charAt(0)}${(member.LastName||'').charAt(0)}` || '👤'}</span>
+                              )}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                                {member.FirstName && member.LastName ? `${member.FirstName} ${member.LastName}` : member.CNIC}
+                              </span>
+                              <span style={{ marginLeft: '8px', fontSize: '13px', color: '#6b7280' }}>
+                                ({member.CNIC})
+                              </span>
+                            </div>
                           </div>
-                          <span style={{
-                            padding: '4px 12px',
-                            backgroundColor: member.Role === 'President' ? '#fbbf24' : member.Role === 'Treasurer' ? '#60a5fa' : '#34d399',
-                            color: 'white',
-                            borderRadius: '20px',
-                            fontSize: '12px',
-                            fontWeight: '600'
-                          }}>
-                            {member.Role}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{
+                              padding: '4px 12px',
+                              backgroundColor: member.Role === 'President' ? '#fbbf24' : member.Role === 'Treasurer' ? '#60a5fa' : '#34d399',
+                              color: 'white',
+                              borderRadius: '20px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}>
+                              {member.Role}
+                            </span>
+                            {String(member.CNIC) === String(user.cnic) && (
+                              <button
+                                onClick={() => handleWithdraw(candidate.Id)}
+                                disabled={withdrawingId === candidate.Id}
+                                style={{
+                                  padding: '4px 12px',
+                                  backgroundColor: '#ef4444',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '20px',
+                                  fontSize: '12px',
+                                  fontWeight: '600',
+                                  cursor: withdrawingId === candidate.Id ? 'not-allowed' : 'pointer',
+                                  opacity: withdrawingId === candidate.Id ? 0.7 : 1,
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title="Withdraw your panel membership"
+                              >
+                                {withdrawingId === candidate.Id ? 'Withdrawing...' : 'Withdraw'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <p style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>No panel members</p>
                   )}
+                  {candidate.CascadeDeleteOnWithdraw && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '8px 12px',
+                      backgroundColor: '#fef3c7',
+                      border: '1px solid #fcd34d',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: '#92400e'
+                    }}>
+                      ⚠️ <strong>Important:</strong> Withdrawing will remove ALL panel members, not just you.
+                    </div>
+                  )}
                 </div>
 
-                {/* Support Section */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -273,79 +312,6 @@ const NominationInfo = ({ user, onBack }) => {
             ))}
           </div>
         )}
-
-        {/* SUPPORT HISTORY SECTION TEMPORARILY DISABLED
-        {nominationOpen && supportHistory.length > 0 && (
-          <div style={{ marginTop: '30px', borderTop: '2px solid #e5e7eb', paddingTop: '20px' }}>
-            <button
-              onClick={() => setShowSupportList(!showSupportList)}
-              style={{
-                width: '100%',
-                padding: '12px 20px',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                marginBottom: '15px',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#2563eb';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#3b82f6';
-              }}
-            >
-              {showSupportList ? '▼ Hide Support List' : '▶ Show Support List'}
-            </button>
-
-            {showSupportList && (
-              <div style={{
-                backgroundColor: '#f3f4f6',
-                borderRadius: '8px',
-                padding: '20px',
-                maxHeight: '400px',
-                overflowY: 'auto'
-              }}>
-                <h3 style={{ margin: '0 0 15px 0', fontSize: '16px', color: '#1f2937' }}>
-                  👥 Support History - Current Nomination
-                </h3>
-                {supportHistory.map((support, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      backgroundColor: 'white',
-                      borderLeft: '4px solid #3b82f6',
-                      padding: '12px',
-                      marginBottom: '10px',
-                      borderRadius: '4px',
-                      fontSize: '13px'
-                    }}
-                  >
-                    <div style={{ marginBottom: '5px' }}>
-                      <strong style={{ color: '#1f2937' }}>
-                        {support.SupporterFirstName} {support.SupporterLastName}
-                      </strong>
-                      <span style={{ color: '#6b7280', marginLeft: '10px' }}>
-                        ({support.SupporterCNIC})
-                      </span>
-                    </div>
-                    <div style={{ color: '#4b5563', marginBottom: '5px' }}>
-                      ➜ Supported: <strong>{support.CandidateFirstName} {support.CandidateLastName}</strong>
-                    </div>
-                    <div style={{ color: '#9ca3af', fontSize: '12px' }}>
-                      Category: {support.Category}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        */}
 
         <button
           onClick={onBack}

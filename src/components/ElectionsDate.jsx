@@ -4,6 +4,7 @@ import { getNHCList, setElectionDate, deleteElectionDate, getElections } from '.
 import logo from '../assets/logo.png';
 
 const ElectionsDate = ({ onBack }) => {
+  // State for selecting an NHC and setting its election window.
   const [nhcList, setNhcList] = useState([]);
   const [selectedNHC, setSelectedNHC] = useState(null);
   const [electionStartDate, setElectionStartDate] = useState('');
@@ -32,7 +33,7 @@ const ElectionsDate = ({ onBack }) => {
   }, []);
 
   const canSetNewElection = (nhc) => {
-    // Find the last election for this NHC
+    // Prevent scheduling a new election until the one-year cooldown has passed.
     const lastElection = elections.find(e => e.NHC_Id === (nhc.id || nhc.Id) || e.NHC_Id === nhc.Id);
     
     if (!lastElection) {
@@ -61,6 +62,7 @@ const ElectionsDate = ({ onBack }) => {
   };
 
   const handleSaveDate = async () => {
+    // Validate the date range and persist the election schedule.
     if (!selectedNHC || !electionStartDate || !electionEndDate) {
       alert('Please select an NHC and set both start and end election dates');
       return;
@@ -125,7 +127,7 @@ const ElectionsDate = ({ onBack }) => {
 
   return (
     <div className="admin-dashboard-container">
-      {/* HEADER */}
+      {/* Header for the election scheduler. */}
       <div className="dashboard-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <img src={logo} alt="Logo" style={{ height: '100px', width: 'auto' }} />
@@ -139,7 +141,7 @@ const ElectionsDate = ({ onBack }) => {
         <div></div>
       </div>
 
-      {/* CONTENT */}
+      {/* Scheduler form and current status details. */}
       <div style={{ padding: '30px 20px' }}>
         {loading ? (
           <p style={{ textAlign: 'center', color: '#666' }}>Loading NHCs...</p>

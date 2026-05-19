@@ -4,6 +4,7 @@ import { getNHCList, setNominationDate, deleteNominationDate, getNominations } f
 import logo from '../assets/logo.png';
 
 const NominationsDate = ({ onBack }) => {
+  // Nomination schedule editor for all NHCs.
   const [nhcList, setNhcList] = useState([]);
   const [selectedNHC, setSelectedNHC] = useState(null);
   const [nominationStartDate, setNominationStartDate] = useState('');
@@ -32,7 +33,7 @@ const NominationsDate = ({ onBack }) => {
   }, []);
 
   const canSetNewNomination = (nhc) => {
-    // Find the last nomination for this NHC
+    // Prevent opening a new nomination window until the cooldown expires.
     const lastNomination = nominations.find(n => n.NHC_Id === (nhc.id || nhc.Id) || n.NHC_Id === nhc.Id);
     
     if (!lastNomination) {
@@ -61,6 +62,7 @@ const NominationsDate = ({ onBack }) => {
   };
 
   const handleSaveDate = async () => {
+    // Validate and persist the nomination date range.
     if (!selectedNHC || !nominationStartDate || !nominationEndDate) {
       alert('Please select an NHC and set both start and end nomination dates');
       return;
@@ -125,7 +127,7 @@ const NominationsDate = ({ onBack }) => {
 
   return (
     <div className="admin-dashboard-container">
-      {/* HEADER */}
+      {/* Header for nomination scheduling. */}
       <div className="dashboard-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <img src={logo} alt="Logo" style={{ height: '100px', width: 'auto' }} />
@@ -139,7 +141,7 @@ const NominationsDate = ({ onBack }) => {
         <div></div>
       </div>
 
-      {/* CONTENT */}
+      {/* Scheduler contents and current nomination state. */}
       <div style={{ padding: '30px 20px' }}>
         {loading ? (
           <p style={{ textAlign: 'center', color: '#666' }}>Loading NHCs...</p>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './AdminDashboard.css';
 
 const RequestNHC = ({ user, onSubmit, onCancel }) => {
+  // Local form state for the council reassignment request.
   const [location, setLocation] = useState('');
   const [address, setAddress] = useState('');
   const [reason, setReason] = useState('');
@@ -16,6 +17,7 @@ const RequestNHC = ({ user, onSubmit, onCancel }) => {
   }, [user]);
 
   const handleLocate = () => {
+    // Resolve the user's coordinates into a readable address.
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by this browser.');
       return;
@@ -56,12 +58,14 @@ const RequestNHC = ({ user, onSubmit, onCancel }) => {
 
   return (
     <div className="admin-dashboard-container" style={{ padding: '40px 20px', maxWidth: '500px', margin: '0 auto' }}>
+      {/* Header and close action for the request form. */}
       <div className="simple-header">
         <button className="back-btn" onClick={onCancel}>
           ← Back
         </button>
         <h2>Request New NHC</h2>
       </div>
+      {/* Request form fields and submit actions. */}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div>
           <label style={{ fontWeight: 'bold' }}>Location</label>

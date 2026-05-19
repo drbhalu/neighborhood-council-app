@@ -3,7 +3,7 @@ import logo from '../assets/logo.png';
 
 const Splash = ({ onSplashComplete }) => {
   useEffect(() => {
-    // Show splash screen for 3 seconds then transition to login
+    // Keep the splash screen on screen briefly before switching views.
     const timer = setTimeout(() => {
       onSplashComplete();
     }, 3000);
@@ -23,6 +23,7 @@ const Splash = ({ onSplashComplete }) => {
       margin: 0,
       padding: 0
     }}>
+      {/* App logo shown during the initial loading screen. */}
       <img 
         src={logo} 
         alt="Logo" 

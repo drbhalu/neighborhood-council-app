@@ -3,6 +3,7 @@ import { getElections, getCandidateElectionVotes, castElectionVote, getPositions
 import ElectionResults from './ElectionResults';
 
 const VoteCandidate = ({ user, onBack }) => {
+  // Voting workflow state for the active election.
   const [candidates, setCandidates] = useState([]);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [voted, setVoted] = useState(false);
@@ -18,7 +19,7 @@ const VoteCandidate = ({ user, onBack }) => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Resolve NHC Id: prefer numeric nhcId, fallback to nhcCode -> id lookup
+        // Resolve the NHC ID from either the numeric id or the council code.
         let resolvedNhcId = user.nhcId || null;
         if (!resolvedNhcId && user.nhcCode) {
           try {
@@ -38,7 +39,7 @@ const VoteCandidate = ({ user, onBack }) => {
           return;
         }
 
-        // Load election dates for this specific NHC
+        // Load election dates for this specific NHC.
         const elections = await getElections(resolvedNhcId);
         const election = (elections || [])[0]; // Backend now filters by nhcId
         
@@ -79,7 +80,7 @@ const VoteCandidate = ({ user, onBack }) => {
           setElectionId(null);
         }
 
-        // Load positions (categories) and eligible candidates from API
+        // Load positions and eligible candidates for the ballot.
         try {
           const [posData, candData] = await Promise.all([
             getPositions(),
@@ -108,6 +109,7 @@ const VoteCandidate = ({ user, onBack }) => {
   }, [user]);
 
   const handleVote = async () => {
+    // Cast the selected vote and refresh the candidate list.
     if (!selectedCandidate || !electionOpen) {
       return;
     }
@@ -190,7 +192,7 @@ const VoteCandidate = ({ user, onBack }) => {
         overflowY: 'auto',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
-        {/* HEADER */}
+        {/* Header and close action for the voting modal. */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -212,7 +214,7 @@ const VoteCandidate = ({ user, onBack }) => {
           </button>
         </div>
 
-        {/* CONTENT */}
+        {/* Success, closed, empty, and vote-ready states. */}
         {voted ? (
           <div style={{
             textAlign: 'center',
@@ -342,22 +344,24 @@ const VoteCandidate = ({ user, onBack }) => {
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                             <div style={{
-                              width: '24px',
-                              height: '24px',
+                              width: '48px',
+                              height: '48px',
                               borderRadius: '50%',
+                              overflow: 'hidden',
                               border: selectedCandidate === candidate.Id ? '3px solid #10b981' : '2px solid #d1d5db',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center'
                             }}>
-                              {selectedCandidate === candidate.Id && (
-                                <div style={{
-                                  width: '12px',
-                                  height: '12px',
-                                  borderRadius: '50%',
-                                  backgroundColor: '#10b981'
-                                }}></div>
-                              )}
+                              {(() => {
+                                const src = candidate.profileImage || candidate.ProfileImage || null;
+                                const initials = `${(candidate.FirstName||'').charAt(0)}${(candidate.LastName||'').charAt(0)}`;
+                                return src ? (
+                                  <img src={src} alt="Candidate" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                  <div style={{ fontWeight: '700', color: '#64748b' }}>{initials || '👤'}</div>
+                                );
+                              })()}
                             </div>
                             <div style={{ flex: 1 }}>
                               {candidate.PanelName && (
@@ -371,19 +375,13 @@ const VoteCandidate = ({ user, onBack }) => {
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                     {candidate.PanelMembers.map(m => (
                                       <div key={m.CNIC} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{
-                                          display: 'inline-block',
-                                          padding: '2px 8px',
-                                          backgroundColor: m.Role === 'President' ? '#fbbf24' : m.Role === 'Treasurer' ? '#60a5fa' : m.Role === 'Vice President' ? '#34d399' : '#d1d5db',
-                                          color: 'white',
-                                          borderRadius: '12px',
-                                          fontSize: '10px',
-                                          fontWeight: 'bold',
-                                          minWidth: '75px',
-                                          textAlign: 'center'
-                                        }}>
-                                          {m.Role}
-                                        </span>
+                                        <div style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                          {m.profileImage || m.ProfileImage ? (
+                                            <img src={m.profileImage || m.ProfileImage} alt="member" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                          ) : (
+                                            <span style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>{`${(m.FirstName||'').charAt(0)}${(m.LastName||'').charAt(0)}` || '👤'}</span>
+                                          )}
+                                        </div>
                                         <span style={{ color: '#1f2937', fontWeight: '500' }}>{m.FirstName && m.LastName ? `${m.FirstName} ${m.LastName}` : m.CNIC}</span>
                                       </div>
                                     ))}

@@ -11,10 +11,9 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./CreateNHC.css";
+import logo from "../assets/logo.png";
 
-/* ===========================
-   Fix Leaflet Marker Icons
-=========================== */
+/* Leaflet needs explicit marker icon paths in this app bundle. */
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -25,9 +24,7 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-/* ===========================
-   Click to Draw Polygon
-=========================== */
+/* Collect polygon points from map clicks. */
 const ClickableMap = ({ markers, setMarkers }) => {
   useMapEvents({
     click(e) {
@@ -38,9 +35,7 @@ const ClickableMap = ({ markers, setMarkers }) => {
   return null;
 };
 
-/* ===========================
-   Move Map Controller
-=========================== */
+/* Recenter the map after a search result is chosen. */
 const MapController = ({ center }) => {
   const map = useMap();
 
@@ -53,18 +48,13 @@ const MapController = ({ center }) => {
   return null;
 };
 
-/* ===========================
-   MAIN COMPONENT
-=========================== */
+/* NHC drawing workspace. */
 const CreateNHC = ({ onCreateNHC, onBack }) => {
   const [nhcName, setNhcName] = useState("");
   const [searchAddress, setSearchAddress] = useState("");
   const [markers, setMarkers] = useState([]);
   const [center, setCenter] = useState([33.5651, 73.0169]); // Default (Islamabad)
 
-  /* ===========================
-     SEARCH ADDRESS + ADD MARKER
-  =========================== */
   const handleSearchAddress = async () => {
     if (!searchAddress) {
       alert("Please enter an address");
@@ -85,19 +75,16 @@ const CreateNHC = ({ onCreateNHC, onBack }) => {
       const lat = parseFloat(data[0].lat);
       const lng = parseFloat(data[0].lon);
 
-      // Move map
+      // Move the map to the searched location.
       setCenter([lat, lng]);
 
-      // ✅ ADD FIRST MARKER AUTOMATICALLY
+      // Seed the first marker at the searched location.
       setMarkers([{ lat, lng }]);
     } catch (error) {
       alert("Error searching address");
     }
   };
 
-  /* ===========================
-     CREATE NHC
-  =========================== */
   const handleCreate = () => {
     if (!nhcName || markers.length < 3) {
       alert("Enter NHC name and draw at least 3 points");
@@ -118,7 +105,12 @@ const CreateNHC = ({ onCreateNHC, onBack }) => {
 
   return (
     <div className="create-nhc-container">
-      {/* Header */}
+      {/* Logo */}
+      <div style={{ textAlign: "center", marginBottom: "20px" }}>
+        <img src={logo} alt="Logo" style={{ height: "80px", width: "auto" }} />
+      </div>
+
+      {/* Header and navigation back to the previous admin screen. */}
       <div className="simple-header">
         <button className="back-btn" onClick={onBack}>
           ← Back
@@ -126,7 +118,7 @@ const CreateNHC = ({ onCreateNHC, onBack }) => {
         <h2>CREATE NHC</h2>
       </div>
 
-      {/* NHC Name */}
+      {/* NHC name input. */}
       <input
         className="nhc-input"
         placeholder="Enter NHC Name (e.g. 6th Road RWP)"
@@ -134,7 +126,7 @@ const CreateNHC = ({ onCreateNHC, onBack }) => {
         onChange={(e) => setNhcName(e.target.value)}
       />
 
-      {/* Optional Address */}
+      {/* Optional address search that also seeds the polygon. */}
       <input
         className="nhc-input"
         placeholder="Optional: Enter area/address"
@@ -145,7 +137,7 @@ const CreateNHC = ({ onCreateNHC, onBack }) => {
         Search Area
       </button>
 
-      {/* MAP */}
+      {/* Interactive map for drawing the council boundary. */}
       <MapContainer
         center={center}
         zoom={16}
@@ -157,14 +149,14 @@ const CreateNHC = ({ onCreateNHC, onBack }) => {
         <MapController center={center} />
         <ClickableMap markers={markers} setMarkers={setMarkers} />
 
-        {/* Markers */}
+        {/* Boundary vertices. */}
         {markers.map((pos, idx) => (
           <Marker key={idx} position={[pos.lat, pos.lng]}>
             <Popup>Point {idx + 1}</Popup>
           </Marker>
         ))}
 
-        {/* Polygon */}
+        {/* Filled polygon once at least three points are chosen. */}
         {markers.length >= 3 && (
           <Polygon
             positions={markers}
@@ -177,7 +169,7 @@ const CreateNHC = ({ onCreateNHC, onBack }) => {
         )}
       </MapContainer>
 
-      {/* Buttons */}
+      {/* Reset and create actions. */}
       <div className="btn-row">
         <button className="reset-btn" onClick={handleReset}>
           Reset Points

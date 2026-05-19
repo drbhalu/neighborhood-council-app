@@ -3,6 +3,7 @@ import { createSuggestion, getSuggestionsByUser } from '../api';
 import logo from '../assets/logo.png';
 
 const SuggestionsForm = ({ user, onClose, onSuccess }) => {
+  // Keep both the suggestion form and the member's prior suggestions in local state.
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,6 +37,7 @@ const SuggestionsForm = ({ user, onClose, onSuccess }) => {
   };
 
   useEffect(() => {
+    // Refresh the member's suggestion history whenever the user identity changes.
     fetchMySuggestions();
   }, [resolvedCnic]);
 
@@ -104,7 +106,7 @@ const SuggestionsForm = ({ user, onClose, onSuccess }) => {
         boxShadow: 'none',
         overflowY: 'auto'
       }}>
-        {/* HEADER */}
+        {/* Header with branding and close control. */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
           <img src={logo} alt="Logo" style={{ height: '40px', width: 'auto' }} />
           <button
@@ -128,7 +130,7 @@ const SuggestionsForm = ({ user, onClose, onSuccess }) => {
           Share your ideas and suggestions with NHC leadership
         </p>
 
-        {/* SUCCESS MESSAGE */}
+        {/* Confirmation shown after a successful submission. */}
         {success && (
           <div style={{
             backgroundColor: '#d1fae5',
@@ -143,7 +145,7 @@ const SuggestionsForm = ({ user, onClose, onSuccess }) => {
           </div>
         )}
 
-        {/* ERROR MESSAGE */}
+        {/* Validation or server errors appear here. */}
         {error && (
           <div style={{
             backgroundColor: '#fee2e2',
@@ -158,9 +160,9 @@ const SuggestionsForm = ({ user, onClose, onSuccess }) => {
           </div>
         )}
 
-        {/* FORM */}
+        {/* Suggestion submission form. */}
         <form onSubmit={handleSubmit}>
-          {/* TITLE */}
+          {/* Suggestion title input. */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{
               display: 'block',
@@ -189,7 +191,7 @@ const SuggestionsForm = ({ user, onClose, onSuccess }) => {
             />
           </div>
 
-          {/* DESCRIPTION */}
+          {/* Description explains the idea in more detail. */}
           <div style={{ marginBottom: '30px' }}>
             <label style={{
               display: 'block',

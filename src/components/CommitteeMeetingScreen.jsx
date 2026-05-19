@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { getComplaintHistory, saveCommitteeMeetingDecision, getComplaintsByUser } from '../api';
+import { getComplaintHistory, saveCommitteeMeetingDecision, getComplaintsByUser, getComplaintById, getCommitteeSettings, getComplaintsByNHC } from '../api';
 
 const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPresidentReview = false, nhcCode }) => {
+  // Normalize old and new decision values so the UI stays compatible with saved data.
   const normalizeDecision = (value) => {
     const v = String(value || '').toLowerCase().trim();
     if (v === 'budget' || v === 'budget needed') return 'budget';
@@ -10,6 +11,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
     return '';
   };
 
+  // Form state for committee input and optional president review.
   const [minutesFile, setMinutesFile] = useState(null);
   const [remarks, setRemarks] = useState(committee?.CommitteeRemarks || '');
   const [decision, setDecision] = useState(normalizeDecision(committee?.MeetingDecision));
@@ -26,15 +28,34 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
   const [filerHistory, setFilerHistory] = useState([]);
   const [filerHistoryLoading, setFilerHistoryLoading] = useState(false);
   const [filerHistoryError, setFilerHistoryError] = useState('');
+  const [complaintRecord, setComplaintRecord] = useState(committee || null);
+  const [complaintLoading, setComplaintLoading] = useState(false);
+  const [complaintError, setComplaintError] = useState('');
+  const [enableUrgentWorkflow, setEnableUrgentWorkflow] = useState(true);
+  const [unassignedUrgentComplaints, setUnassignedUrgentComplaints] = useState([]);
+  const [urgentBlockAlert, setUrgentBlockAlert] = useState(false);
+  const [urgentBlockMessage, setUrgentBlockMessage] = useState('');
+  // View mode flags keep committee editing and president final review separate.
   const isPresident = String(user?.role || '').toLowerCase() === 'president';
   const isPresidentFinalReview = isPresident && allowPresidentReview;
-  const isReadOnlyView = (isPresident && !allowPresidentReview) || isPresidentFinalReview;
+
   const complaintId = committee?.ComplaintId || committee?.Id;
+  const isPublicComplaint = String(committee?.PublicComplaint || committee?.publicComplaint || '').toLowerCase() === '1' || committee?.PublicComplaint === true || committee?.publicComplaint === true;
 
-  const complainant = committee?.ComplaintUserName || committee?.UserName || committee?.ComplaintUserCNIC || committee?.UserCNIC || 'N/A';
-  const complaintType = String(committee?.ComplaintType || '').toLowerCase() === 'against' ? 'Against Member' : 'Normal';
-  const statusLabel = committee?.ComplaintStatus || committee?.Status || 'In Progress';
+  const currentComplaint = complaintRecord || committee;
+  const complainant = currentComplaint?.ComplaintUserName || currentComplaint?.UserName || currentComplaint?.ComplaintUserCNIC || currentComplaint?.UserCNIC || 'N/A';
+  const complaintType = String(currentComplaint?.ComplaintType || '').toLowerCase() === 'against' ? 'Against Member' : 'Normal';
+  const againstMemberName = currentComplaint?.AgainstMemberName || currentComplaint?.againstMemberName || '';
+  const againstMemberCnic = currentComplaint?.AgainstMemberCNIC || currentComplaint?.againstMemberCNIC || currentComplaint?.AgainstMember || currentComplaint?.againstMember || '';
+  const statusLabel = currentComplaint?.ComplaintStatus || currentComplaint?.Status || 'In Progress';
+  const isUrgentComplaint =
+    String(currentComplaint?.UrgentComplaint || currentComplaint?.urgentComplaint || '').toLowerCase() === '1' ||
+    String(currentComplaint?.UrgentComplaint || currentComplaint?.urgentComplaint || '').toLowerCase() === 'true' ||
+    currentComplaint?.UrgentComplaint === true ||
+    currentComplaint?.urgentComplaint === true ||
+    currentComplaint?.UrgentComplaint === 1;
 
+  // Convert the meeting decision into the backend status label.
   const mapDecisionToStatus = (value, presidentDecision = '') => {
     // If president is making final review, use their decision
     if (isPresidentFinalReview && presidentDecision) {
@@ -69,6 +90,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
     inprogress: 'Need More Work / Still In Progress',
   };
 
+  // Evidence helpers accept arrays, JSON strings, or plain file paths.
   const toEvidencePaths = (rawValue) => {
     if (!rawValue) return [];
     if (Array.isArray(rawValue)) return rawValue.filter(Boolean);
@@ -170,6 +192,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
   };
 
   useEffect(() => {
+    // Load the complaint's action history for the current member.
     const loadHistory = async () => {
       if (!complaintId || !user?.cnic) return;
       try {
@@ -188,6 +211,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
   }, [complaintId, user?.cnic]);
 
   useEffect(() => {
+    // Load earlier complaints from the filer to help with review context.
     const loadFilerHistory = async () => {
       const complainantCnic = committee?.ComplaintUserCNIC || committee?.UserCNIC;
       const filerNhcCode = nhcCode || committee?.NHC_Code || committee?.NHCCode || committee?.nhcCode || null;
@@ -207,13 +231,84 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
     loadFilerHistory();
   }, [committee?.ComplaintUserCNIC, committee?.UserCNIC, committee?.NHC_Code, committee?.NHCCode, committee?.nhcCode, nhcCode]);
 
+  useEffect(() => {
+    setComplaintRecord(committee || null);
+  }, [committee]);
+
+  useEffect(() => {
+    const loadComplaintRecord = async () => {
+      if (!complaintId) return;
+      try {
+        setComplaintLoading(true);
+        setComplaintError('');
+        const complaint = await getComplaintById(complaintId);
+        setComplaintRecord(complaint || committee || null);
+      } catch (err) {
+        setComplaintError(err.message || 'Unable to load complaint details');
+      } finally {
+        setComplaintLoading(false);
+      }
+    };
+
+    loadComplaintRecord();
+  }, [complaintId, committee]);
+
+  useEffect(() => {
+    const normalizeStatus = (status) => {
+      const normalized = String(status || '').toLowerCase().trim();
+      if (normalized.includes('resolved')) return 'resolved';
+      if (normalized.includes('rejected')) return 'rejected';
+      if (normalized.includes('pending')) return 'pending';
+      return normalized;
+    };
+
+    // Load urgent workflow setting and get unresolved urgent complaints across the NHC.
+    const loadUrgentWorkflowData = async () => {
+      try {
+        const settings = await getCommitteeSettings();
+        setEnableUrgentWorkflow(settings?.enableUrgentWorkflow !== false);
+
+        if (!settings?.enableUrgentWorkflow) {
+          setUnassignedUrgentComplaints([]);
+          return;
+        }
+
+        const complaintsData = nhcCode ? await getComplaintsByNHC(nhcCode) : [];
+        const urgentComplaints = (complaintsData || []).filter((c) => {
+          const status = normalizeStatus(c.ComplaintStatus || c.Status);
+          const isUrgent = String(c?.UrgentComplaint || c?.urgentComplaint || '').toLowerCase() === '1' ||
+            String(c?.UrgentComplaint || c?.urgentComplaint || '').toLowerCase() === 'true' ||
+            c?.UrgentComplaint === 1 ||
+            c?.UrgentComplaint === true;
+          return isUrgent && status !== 'resolved' && status !== 'rejected';
+        });
+        setUnassignedUrgentComplaints(urgentComplaints);
+      } catch (err) {
+        console.error('Error loading urgent workflow data:', err);
+      }
+    };
+
+    loadUrgentWorkflowData();
+  }, [nhcCode]);
+
   const handleSave = async () => {
+    // Validate the active decision before sending it to the API.
     if (isPresident && !allowPresidentReview) {
       alert('President can only view committee decisions.');
       return;
     }
 
     const selectedDecision = isPresidentFinalReview ? (decision || 'solved') : decision;
+
+    // Urgent-first enforcement: block saving a non-urgent decision when there are unassigned urgent complaints
+    try {
+      if (enableUrgentWorkflow && unassignedUrgentComplaints.length > 0 && !isUrgentComplaint) {
+        alert('First make decision on urgent first');
+        return;
+      }
+    } catch (err) {
+      // ignore
+    }
 
     if (!complaintId) {
       alert('No complaint is assigned to this committee.');
@@ -224,7 +319,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
       return;
     }
     if (selectedDecision === 'budget') {
-      if (!String(budgetAmount || '').trim()) {
+      if (!String(budgetAmount ||'').trim()) {
         alert('Please enter how much budget is needed.');
         return;
       }
@@ -326,13 +421,49 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
         </h2>
       </div>
 
+      {/* URGENT WORKFLOW ALERT */}
+      {enableUrgentWorkflow && unassignedUrgentComplaints.length > 0 && !isUrgentComplaint && (
+        <div style={{
+          backgroundColor: '#fee2e2',
+          border: '2px solid #dc2626',
+          color: '#991b1b',
+          padding: '16px',
+          borderRadius: '8px',
+          marginBottom: '16px',
+          fontSize: '15px',
+          fontWeight: 'bold'
+        }}>
+          ⚠️ <strong>{unassignedUrgentComplaints.length} URGENT complaint(s) need attention first!</strong> Please complete urgent complaints before working on others.
+        </div>
+      )}
+
       {/* COMPLAINT OVERVIEW */}
       <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '18px' }}>
-        <h3 style={{ margin: '0 0 10px 0', fontSize: '22px', color: '#111827' }}>
-          {committee?.ComplaintCategory || committee?.PanelName || 'Committee Complaint'}
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+          <h3 style={{ margin: 0, fontSize: '22px', color: '#111827' }}>
+            {currentComplaint?.ComplaintCategory || currentComplaint?.PanelName || 'Committee Complaint'}
+          </h3>
+          {isUrgentComplaint && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px 10px',
+                borderRadius: '999px',
+                backgroundColor: '#fee2e2',
+                color: '#b91c1c',
+                fontSize: '13px',
+                fontWeight: '700',
+                border: '1px solid #fca5a5',
+              }}
+            >
+              URGENT
+            </span>
+          )}
+        </div>
         <p style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#334155', lineHeight: 1.55 }}>
-          {committee?.ComplaintDescription || 'No complaint details available.'}
+          {currentComplaint?.ComplaintDescription || 'No complaint details available.'}
         </p>
         <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#1f2937' }}>
           <strong>Complainant:</strong> {complainant}
@@ -340,17 +471,34 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
         <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#1f2937' }}>
           <strong>Type:</strong> {complaintType}
         </p>
+        {String(currentComplaint?.ComplaintType || '').toLowerCase() === 'against' && (againstMemberName || againstMemberCnic) && (
+          <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#1f2937' }}>
+            <strong>Against:</strong> {againstMemberName || 'N/A'}{againstMemberCnic ? ` (CNIC: ${againstMemberCnic})` : ''}
+          </p>
+        )}
+        <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: isPublicComplaint ? '#065f46' : '#1f2937' }}>
+          <strong>Visibility:</strong> {isPublicComplaint ? 'Public hearing for all NHC members' : 'Committee only'}
+        </p>
         <p style={{ margin: 0, fontSize: '15px', color: '#1f2937' }}>
           <strong>Status:</strong> {statusLabel}
         </p>
+        {isPublicComplaint && (
+          <div style={{ marginTop: '14px', padding: '12px 14px', borderRadius: '12px', backgroundColor: '#ecfdf5', border: '1px solid #86efac', color: '#065f46', fontSize: '14px', lineHeight: 1.6 }}>
+            This complaint is public. All members in the NHC receive a notification and can attend the hearing by opening the complaint from their notifications.
+          </div>
+        )}
       </div>
 
      {/*File Complaint Histry*/} 
-      {/*
+      
+
       <div style={{ marginTop: '14px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '18px' }}>
-        <h3 style={sectionTitleStyle}>Filer History</h3>
+      
+    
+
+        <h3 style={sectionTitleStyle}>Match Title Complaints</h3>
         {filerHistoryLoading ? (
-          <p style={{ margin: 0, color: '#64748b' }}>Loading filer history...</p>
+          <p style={{ margin: 0, color: '#64748b' }}>Loading same Title history</p>
         ) : filerHistoryError ? (
           <p style={{ margin: 0, color: '#b91c1c' }}>{filerHistoryError}</p>
         ) : filerHistory.length === 0 ? (
@@ -399,8 +547,25 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
           </div>
         )}
       </div>
-      */}
+      
      
+       {/* <button
+                        onClick={() => {
+                          
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          border: 'none',
+                          borderRadius: '8px',
+                          backgroundColor: '#0ea5e9',
+                          color: 'white',
+                          fontSize: '13px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Rise Money
+                      </button> */}
 
       {/* COMMITTEE DECISION - HIGHLIGHTED FOR PRESIDENT REVIEW */}
       {isPresidentFinalReview && (
@@ -608,16 +773,16 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
               type="file"
               accept="application/pdf"
               style={{ display: 'none' }}
-              disabled={isReadOnlyView}
+            
               onChange={(e) => setMinutesFile(e.target.files?.[0] || null)}
             />
           </label>
 
-          {isPresident && !allowPresidentReview ? (
+          {/* {isPresident && !allowPresidentReview ? (
             <p style={{ margin: '0 0 12px 0', color: '#991b1b', fontSize: '14px' }}>
               View only: President cannot make committee decisions.
             </p>
-          ) : null}
+          ) : null} */}
 
           {committee?.MeetingMinutesPath && !minutesFile ? (
             <a
@@ -633,7 +798,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
           <textarea
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
-            disabled={isReadOnlyView}
+ 
             placeholder="Enter meeting summary / minutes remarks"
             style={{
               ...inputStyle,
@@ -657,7 +822,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
               onChange={() => {
                 setDecision('budget');
               }}
-              disabled={isReadOnlyView}
+   
               style={{ width: '18px', height: '18px' }}
             />
             {decisionLabelMap.budget}
@@ -668,7 +833,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
                 type="text"
                 value={budgetAmount}
                 onChange={(e) => setBudgetAmount(e.target.value)}
-                disabled={isReadOnlyView}
+                
                 placeholder="How much budget is needed"
                 style={{
                   ...inputStyle,
@@ -678,7 +843,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
               <textarea
                 value={budgetReason}
                 onChange={(e) => setBudgetReason(e.target.value)}
-                disabled={isReadOnlyView}
+            
                 placeholder="Why more budget is needed"
                 style={{
                   ...inputStyle,
@@ -697,7 +862,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
               onChange={() => {
                 setDecision('solved');
               }}
-              disabled={isReadOnlyView}
+         
               style={{ width: '18px', height: '18px' }}
             />
             {decisionLabelMap.solved}
@@ -777,13 +942,13 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
                 type="file"
                 accept="image/*"
                 onChange={(e) => setMinutesFile(e.target.files[0] || null)}
-                disabled={isReadOnlyView}
+     
                 style={{ marginBottom: '12px' }}
               />
               <textarea
                 value={resolutionDescription}
                 onChange={(e) => setResolutionDescription(e.target.value)}
-                disabled={isReadOnlyView}
+            
                 placeholder="Describe how the issue was resolved and confirm completion"
                 style={{
                   ...inputStyle,
@@ -802,7 +967,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
               onChange={() => {
                 setDecision('inprogress');
               }}
-              disabled={isReadOnlyView}
+        
               style={{ width: '18px', height: '18px' }}
             />
             {decisionLabelMap.inprogress}
@@ -811,7 +976,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
             <textarea
               value={moreWorkNeeded}
               onChange={(e) => setMoreWorkNeeded(e.target.value)}
-              disabled={isReadOnlyView}
+     
               placeholder="What more work is needed"
               style={{
                 ...inputStyle,
@@ -920,7 +1085,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
       )}
 
       {/* SAVE BUTTON - FOR COMMITTEE */}
-      {!isPresidentFinalReview && (!isPresident || allowPresidentReview) && (
+   
         <button
           onClick={handleSave}
           disabled={saving}
@@ -941,7 +1106,7 @@ const CommitteeMeetingScreen = ({ committee, user, onBack, onSaved, allowPreside
         >
           {saving ? '⏳ Saving...' : 'Save Meeting Decision'}
         </button>
-      )}
+      
     </div>
   );
 };

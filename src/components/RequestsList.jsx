@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getRequests, assignRequest } from '../api';
 
 const RequestsList = ({ onBack, nhcList }) => {
+  // Admin request queue with assignment and removal actions.
   const [requests, setRequests] = useState([]);
   const [assigningId, setAssigningId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -20,10 +21,12 @@ const RequestsList = ({ onBack, nhcList }) => {
   }, []);
 
   const refresh = async () => {
+    // Reload the list after an admin action.
     try { const d = await getRequests(); setRequests(d); } catch (e) { console.error(e); }
   };
 
   const handleAssign = async (reqId) => {
+    // Assign the request to the selected NHC.
     const nhc = selectedNHC[reqId] || (nhcList && nhcList[0] && nhcList[0].name);
     if (!nhc) return alert('Select an NHC to assign');
     setAssigningId(reqId);
@@ -38,6 +41,7 @@ const RequestsList = ({ onBack, nhcList }) => {
   };
 
   const handleDelete = async (reqId) => {
+    // Remove the request from the admin inbox without deleting the record.
     if (!window.confirm('Remove this request from admin view? It will remain in the database.')) return;
     setDeletingId(reqId);
     try {
@@ -53,11 +57,13 @@ const RequestsList = ({ onBack, nhcList }) => {
 
   return (
     <div style={{ padding: 20 }}>
+      {/* Header and back action for the request inbox. */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2>Requests</h2>
         <button onClick={onBack} className="menu-btn">Back</button>
       </div>
 
+      {/* Request cards and assignment controls. */}
       {requests.length === 0 ? (
         <p>No requests found.</p>
       ) : (

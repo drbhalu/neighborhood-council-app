@@ -3,6 +3,7 @@ import { getSuggestionsByNHC, updateSuggestionStatus } from '../api';
 import logo from '../assets/logo.png';
 
 const AllSuggestions = ({ user, onClose }) => {
+  // Suggestions belong to the current NHC, so the list reloads when the user changes.
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,6 +25,7 @@ const AllSuggestions = ({ user, onClose }) => {
     fetchSuggestions();
   }, [user.nhcCode]);
 
+  // Small status palette for the suggestion workflow.
   const getStatusColor = (status) => {
     switch (status) {
       case 'New':
@@ -37,6 +39,7 @@ const AllSuggestions = ({ user, onClose }) => {
     }
   };
 
+  // Save the new moderation status and update the list in place.
   const handleStatusChange = async (suggestionId, nextStatus) => {
     if (!nextStatus) return;
     setError('');
@@ -55,6 +58,7 @@ const AllSuggestions = ({ user, onClose }) => {
     }
   };
 
+  // Render either the empty state or the suggestion cards.
   const renderSuggestionList = () => {
     if (suggestions.length === 0) {
       return (
@@ -199,7 +203,7 @@ const AllSuggestions = ({ user, onClose }) => {
         boxShadow: 'none',
         overflowY: 'auto'
       }}>
-        {/* HEADER */}
+        {/* Header: page title and close button. */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -226,7 +230,7 @@ const AllSuggestions = ({ user, onClose }) => {
           </button>
         </div>
 
-        {/* USER INFO */}
+        {/* Summary line for the current NHC suggestion inbox. */}
         <div style={{
           textAlign: 'center',
           marginBottom: '30px',
@@ -250,7 +254,7 @@ const AllSuggestions = ({ user, onClose }) => {
           </p>
         </div>
 
-        {/* ERROR MESSAGE */}
+        {/* Surface loading errors directly above the content. */}
         {error && (
           <div style={{
             backgroundColor: '#fee2e2',
@@ -265,7 +269,7 @@ const AllSuggestions = ({ user, onClose }) => {
           </div>
         )}
 
-        {/* LOADING STATE */}
+        {/* Show a loading message while fetching data. */}
         {loading && (
           <div style={{
             textAlign: 'center',
@@ -276,7 +280,7 @@ const AllSuggestions = ({ user, onClose }) => {
           </div>
         )}
 
-        {/* SUGGESTIONS LIST */}
+        {/* Render the list once loading completes. */}
         {!loading && renderSuggestionList()}
       </div>
     </div>

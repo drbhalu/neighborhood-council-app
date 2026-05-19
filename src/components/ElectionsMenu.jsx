@@ -3,6 +3,7 @@ import './AdminDashboard.css';
 import logo from '../assets/logo.png';
 
 const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
+  // Determine whether the current council's election has already ended.
   const [isElectionEnded, setIsElectionEnded] = useState(false);
 
   useEffect(() => {
@@ -13,7 +14,7 @@ const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
           return;
         }
 
-        // Fetch latest election regardless of active/ended status
+        // Fetch the latest election regardless of active or ended status.
         const response = await fetch(`/api/election-by-nhc/${user.nhcId}`);
         
         if (!response.ok) {
@@ -61,7 +62,7 @@ const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
         overflow: 'hidden'
       }}>
         <div style={{ padding: '30px 20px' }}>
-          {/* LOGO */}
+          {/* Logo and menu header. */}
           <div style={{
             display: 'flex',
             justifyContent: 'center',
@@ -70,21 +71,21 @@ const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
             <img src={logo} alt="Logo" style={{ height: '80px', width: 'auto' }} />
           </div>
 
-          {/* HEADER */}
+          {/* Menu title. */}
           <div style={{
             marginBottom: '30px'
           }}>
             <h2 style={{ margin: 0, fontSize: '22px', color: '#1f2937', textAlign: 'center', fontWeight: 'bold' }}>Elections & Nominations</h2>
           </div>
 
-          {/* BUTTONS CONTAINER */}
+          {/* Action buttons for election-related screens. */}
           <div className="dashboard-menu" style={{ padding: 0 }}>
             {/* ELECTION BUTTON */}
             <button
               onClick={() => onSelectOption('election')}
               className="menu-btn"
             >
-              🗳️ Election
+               Election
             </button>
 
             {/* NOMINATION BUTTON - VIEW ALL NOMINEES */}
@@ -92,7 +93,7 @@ const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
               onClick={() => onSelectOption('nomination')}
               className="menu-btn"
             >
-              ✍️ View Nominees
+               View Nominees
             </button>
 
             {/* VOTE TO CANDIDATE BUTTON */}
@@ -100,7 +101,7 @@ const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
               onClick={() => onSelectOption('vote')}
               className="menu-btn"
             >
-              🗽️ Vote in Election
+               Vote in Election
             </button>
 
             {/* PANEL CREATION BUTTON */}
@@ -108,7 +109,18 @@ const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
               onClick={() => onSelectOption('selfnomination')}
               className="menu-btn"
             >
-              👥 Create Panel
+               Create Panel
+            </button>
+
+            <button
+              onClick={() => onSelectOption('panel-support-members')}
+              className="menu-btn"
+              style={{
+                opacity: isElectionEnded ? 1 : 1,
+                cursor: 'pointer'
+              }}
+            >
+              Your Panel Supporters
             </button>
 
             {/* Election results button removed per request */}
@@ -123,7 +135,7 @@ const ElectionsMenu = ({ onSelectOption, onClose, user }) => {
               }}
               title='View past election results'
             >
-              📋 Past Results
+            Past Results
             </button>
           </div>
 

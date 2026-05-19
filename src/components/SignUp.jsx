@@ -19,7 +19,7 @@ function isPointInPolygon(point, vs) {
 }
 
 const SignUp = ({ onSwitchToLogin, onSignupSuccess, nhcList }) => {
-  // State
+  // Registration form state, including location and council selection.
   const [formData, setFormData] = useState({
     firstName: 'Junaid', lastName: 'Ahmad', gender: 'Male', cnic: '37405 - 4118859 - 5', 
     phone: '03204567888', address: '6th road rawalpindi', email: 'hasnat@gmail.com', 
@@ -67,6 +67,7 @@ const SignUp = ({ onSwitchToLogin, onSignupSuccess, nhcList }) => {
   };
 
   const getLocation = () => {
+    // Resolve the user's location and match it against the loaded NHC polygons.
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by this browser.");
       return;
@@ -146,7 +147,7 @@ const SignUp = ({ onSwitchToLogin, onSignupSuccess, nhcList }) => {
    const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // 1. Validate Passwords
+    // Validate the registration inputs before calling the API.
     if (formData.password !== formData.confirmPassword) {
       alert("Passwords do not match!");
       return;
@@ -155,7 +156,7 @@ const SignUp = ({ onSwitchToLogin, onSignupSuccess, nhcList }) => {
     try {
       let finalFormData = { ...formData };
       
-      // 2. Upload profile picture if selected
+      // Upload the profile picture first so the saved user record can include it.
       if (profileImageFile) {
         setIsUploading(true);
         try {
@@ -171,14 +172,14 @@ const SignUp = ({ onSwitchToLogin, onSignupSuccess, nhcList }) => {
         finalFormData.profileImage = null;
       }
       
-      // 3. Send registration data to SQL Server via API
+      // Send the final registration payload to the backend.
       const response = await signUpUser(finalFormData);
       
-      // 4. Check response
+      // Switch the flow only when the backend confirms registration.
       if (response.message === "User Registered") {
         alert("Registration Successful! Saved to Database.");
         
-        // 5. If success, tell the parent (App.jsx) to switch views
+        // Notify the parent so it can return to the login flow.
         if (onSignupSuccess) {
           onSignupSuccess(finalFormData);
         }
@@ -194,7 +195,7 @@ const SignUp = ({ onSwitchToLogin, onSignupSuccess, nhcList }) => {
   return (
     <div className="signup-container">
       
-      {/* LOGO */}
+      {/* Brand logo for the signup screen. */}
       <img 
         src={logo} 
         alt="App Logo" 

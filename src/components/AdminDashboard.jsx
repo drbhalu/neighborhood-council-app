@@ -7,10 +7,12 @@ import logo from '../assets/logo.png';
 import AllUsers from './AllUsers';
 
 const AdminDashboard = ({ user, onLogout, onCreateNHC, onNotify, onViewRequests, onViewAllUsers, onViewElections, onViewComplaints }) => {
+  // Dashboard counts keep the admin home screen current without manual refresh.
   const [totalNHC, setTotalNHC] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
 
   useEffect(() => {
+    // Load the high-level admin counts on mount.
     const fetchCounts = async () => {
       try {
         const nhcList = await getNHCList();
@@ -28,7 +30,7 @@ const AdminDashboard = ({ user, onLogout, onCreateNHC, onNotify, onViewRequests,
 
   return (
     <div className="admin-dashboard-container">
-      {/* Header Area */}
+      {/* Header area: brand, title, and live summary cards. */}
       <div className="dashboard-header">
         <div className="dashboard-logo-img">
           <img src={logo} alt="Logo" />
@@ -48,7 +50,7 @@ const AdminDashboard = ({ user, onLogout, onCreateNHC, onNotify, onViewRequests,
         </div>
       </div>
 
-      {/* Menu Buttons Area */}
+      {/* Main navigation for admin tasks. */}
      <div className="dashboard-menu">
   <button className="menu-btn" onClick={onCreateNHC}>CREATE NHC</button>
   

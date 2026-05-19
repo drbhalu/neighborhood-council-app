@@ -7,6 +7,7 @@ import EndElection from './EndElection';
 import logo from '../assets/logo.png';
 
 const Elections = ({ onBack }) => {
+  // Track which election administration screen is currently open.
   const [view, setView] = useState('menu'); // 'menu', 'nominations', 'elections', 'end-nomination', 'end-election'
 
   if (view === 'nominations') {
@@ -27,7 +28,7 @@ const Elections = ({ onBack }) => {
 
   return (
     <div className="admin-dashboard-container">
-      {/* HEADER */}
+      {/* Header for the elections administration hub. */}
       <div className="dashboard-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <img src={logo} alt="Logo" style={{ height: '100px', width: 'auto' }} />
@@ -41,7 +42,7 @@ const Elections = ({ onBack }) => {
         <div></div>
       </div>
 
-      {/* CONTENT */}
+      {/* Main action grid for election setup and closure tasks. */}
       <div style={{ padding: '30px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {/* <p style={{ fontSize: '16px', color: '#666', marginBottom: '40px' }}>Select an option to manage elections and nominations</p>
          */}

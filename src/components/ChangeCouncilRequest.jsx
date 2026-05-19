@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getNHCList } from '../api';
 
 const ChangeCouncilRequest = ({ user, currentNHC, onSubmit, onCancel }) => {
+  // Council change request form state.
   const [allNHCs, setAllNHCs] = useState([]);
   const [selectedNHC, setSelectedNHC] = useState('');
   const [reason, setReason] = useState('');
@@ -14,7 +15,7 @@ const ChangeCouncilRequest = ({ user, currentNHC, onSubmit, onCancel }) => {
       try {
         setLoading(true);
         const nhcList = await getNHCList();
-        // Filter out the current NHC from the list
+        // Exclude the user's current council from the selection list.
         const filtered = (nhcList || []).filter(
           nhc => nhc.name !== currentNHC && nhc.Name !== currentNHC
         );
@@ -30,6 +31,7 @@ const ChangeCouncilRequest = ({ user, currentNHC, onSubmit, onCancel }) => {
   }, [currentNHC]);
 
   const handleSubmit = async () => {
+    // Validate the selected destination council and the reason first.
     if (!selectedNHC) {
       alert('Please select a new NHC');
       return;
@@ -82,7 +84,7 @@ const ChangeCouncilRequest = ({ user, currentNHC, onSubmit, onCancel }) => {
         boxShadow: 'none',
         overflowY: 'auto'
       }}>
-        {/* HEADER */}
+        {/* Header and close action for the council change request. */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -106,7 +108,7 @@ const ChangeCouncilRequest = ({ user, currentNHC, onSubmit, onCancel }) => {
           </button>
         </div>
 
-        {/* CURRENT NHC DISPLAY */}
+        {/* Show the member's current council for context. */}
         <div style={{
           backgroundColor: '#f0fdf4',
           border: '1px solid #86efac',
@@ -122,7 +124,7 @@ const ChangeCouncilRequest = ({ user, currentNHC, onSubmit, onCancel }) => {
           </p>
         </div>
 
-        {/* ERROR MESSAGE */}
+        {/* Surface load or validation errors above the form. */}
         {error && (
           <div style={{
             backgroundColor: '#fee2e2',
@@ -137,7 +139,7 @@ const ChangeCouncilRequest = ({ user, currentNHC, onSubmit, onCancel }) => {
           </div>
         )}
 
-        {/* LOADING STATE */}
+        {/* Loading state while council choices are fetched. */}
         {loading && (
           <div style={{
             textAlign: 'center',
@@ -149,7 +151,7 @@ const ChangeCouncilRequest = ({ user, currentNHC, onSubmit, onCancel }) => {
           </div>
         )}
 
-        {/* FORM */}
+        {/* Council selection and reason fields. */}
         {!loading && (
           <>
             {/* SELECT NEW NHC */}

@@ -3,11 +3,13 @@ import { getPositions } from '../api';
 import './AdminDashboard.css';
 
 const PositionsTable = () => {
+  // Simple lookup table for configured positions.
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchPositions = async () => {
+    // Load the current position catalog from the backend.
     setLoading(true);
     try {
       const data = await getPositions();
@@ -25,6 +27,7 @@ const PositionsTable = () => {
 
   return (
     <div className="positions-container">
+      {/* Positions list and loading/error states. */}
       <h3>Positions</h3>
       {loading && <div>Loading...</div>}
       {error && <div className="error">{error}</div>}

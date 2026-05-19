@@ -16,6 +16,7 @@ const getStatusLabel = (status) => {
 };
 
 const MyComplaints = ({ user, onClose }) => {
+  // Keep the user's complaint list local to this view.
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -52,7 +53,7 @@ const MyComplaints = ({ user, onClose }) => {
     const loadComplaints = async () => {
       try {
         setLoading(true);
-        // Filter by current NHC to avoid seeing complaints from other NHCs
+        // Filter by current NHC to avoid showing complaints from other councils.
         const data = await getComplaintsByUser(user.cnic, user.nhcCode);
         setComplaints(data || []);
       } catch (err) {
@@ -92,6 +93,7 @@ const MyComplaints = ({ user, onClose }) => {
         overflowY: 'auto',
         boxShadow: 'none'
       }}>
+        {/* Header with back/close action and page title. */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -113,10 +115,12 @@ const MyComplaints = ({ user, onClose }) => {
           </button>
         </div>
 
+        {/* Short helper text for the complaint timeline. */}
         <p style={{ marginTop: 0, color: '#64748b', marginBottom: '18px' }}>
           Track all complaints you have filed and their latest status.
         </p>
 
+        {/* Surface fetch failures above the complaint list. */}
         {error && (
           <div style={{
             backgroundColor: '#fee2e2',
@@ -132,6 +136,7 @@ const MyComplaints = ({ user, onClose }) => {
 
         {loading && <p style={{ color: '#475569' }}>Loading your complaints...</p>}
 
+        {/* Empty state when the member has not submitted anything yet. */}
         {!loading && complaints.length === 0 && (
           <div style={{
             padding: '20px',
@@ -143,6 +148,7 @@ const MyComplaints = ({ user, onClose }) => {
           </div>
         )}
 
+        {/* Complaint cards list. */}
         {!loading && !selectedComplaint && complaints.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {complaints.map((complaint) => {
@@ -232,6 +238,7 @@ const MyComplaints = ({ user, onClose }) => {
           </div>
         )}
 
+        {/* Detailed view for a selected complaint. */}
         {!loading && selectedComplaint && (
           <div style={{
             backgroundColor: '#f6f3fa',

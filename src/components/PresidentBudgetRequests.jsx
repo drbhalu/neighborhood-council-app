@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { getBudgetRequests, getComplaintHistory, approveBudgetRequest, rejectBudgetRequest, requestBudgetChanges } from '../api';
+import { getBudgetRequests, getComplaintHistory, approveBudgetRequest, rejectBudgetRequest, requestBudgetChanges, getCommitteeSettings } from '../api';
 
-const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
+const PresidentBudgetRequests = ({ user, nhcCode, onBack, onApproved, canApproveBudget, urgentBudgetCount, enableUrgentWorkflow: urgentWorkflowProp, onBeforeApprove }) => {
+  // President review queue for budget requests and their history.
   const [budgetRequests, setBudgetRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -12,6 +13,9 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
   const [approvalComments, setApprovalComments] = useState('');
   const [showApprovalForm, setShowApprovalForm] = useState(false);
   const [approvalAction, setApprovalAction] = useState(null); // 'approve', 'reject', 'request-changes'
+  const [viewMode, setViewMode] = useState('pending');
+  const [localEnableUrgentWorkflow, setLocalEnableUrgentWorkflow] = useState(true);
+  const [urgentBudgetRequests, setUrgentBudgetRequests] = useState([]);
 
   // Styles
   const containerStyle = {
@@ -91,6 +95,26 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
     color: '#1f2937',
   };
 
+  const tabsStyle = {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '10px',
+    marginBottom: '20px',
+    borderBottom: '2px solid #e2e8f0',
+    paddingBottom: '10px',
+  };
+
+  const tabStyle = (isActive) => ({
+    padding: '10px 18px',
+    border: 'none',
+    background: isActive ? '#2563eb' : 'none',
+    color: isActive ? '#ffffff' : '#64748b',
+    fontSize: '14px',
+    fontWeight: isActive ? '700' : '600',
+    cursor: 'pointer',
+    borderRadius: '999px',
+  });
+
   const statusBadgeStyle = (status) => {
     let bgColor = '#fef3c7';
     let textColor = '#92400e';
@@ -115,19 +139,41 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
     };
   };
 
-  // Load budget requests
+  // Load only requests still waiting for president review.
   useEffect(() => {
     const loadRequests = async () => {
       if (!nhcCode) return;
       try {
         setLoading(true);
         setError('');
-        const data = await getBudgetRequests(nhcCode);
+        const [data, settings] = await Promise.all([
+          getBudgetRequests(nhcCode),
+          getCommitteeSettings()
+        ]);
+        const isUrgentEnabled = typeof urgentWorkflowProp === 'boolean'
+          ? urgentWorkflowProp
+          : settings?.enableUrgentWorkflow !== false;
+        setLocalEnableUrgentWorkflow(settings?.enableUrgentWorkflow !== false);
+        
         // Filter for pending president review
-        const pending = (data || []).filter(r => {
+        let pending = (data || []).filter(r => {
           const status = String(r.PresidentApprovalStatus || 'pending').toLowerCase();
           return status === 'pending';
         });
+        
+        // Sort with urgent requests first if workflow is enabled
+        if (isUrgentEnabled) {
+          pending.sort((a, b) => {
+            const aIsUrgent = isUrgentComplaint(a) ? 0 : 1;
+            const bIsUrgent = isUrgentComplaint(b) ? 0 : 1;
+            return aIsUrgent - bIsUrgent;
+          });
+          const urgentFiltered = pending.filter(isUrgentComplaint);
+          setUrgentBudgetRequests(urgentFiltered);
+        } else {
+          setUrgentBudgetRequests([]);
+        }
+        
         setBudgetRequests(pending);
       } catch (err) {
         setError('Failed to load budget requests: ' + err.message);
@@ -139,7 +185,7 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
     loadRequests();
   }, [nhcCode]);
 
-  // Load history when selecting a request
+  // Load the selected request's history for context.
   useEffect(() => {
     const loadHistory = async () => {
       if (!selectedRequest?.Id || !user?.cnic) return;
@@ -157,7 +203,7 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
     loadHistory();
   }, [selectedRequest?.Id, user?.cnic]);
 
-  // Parse budget details from committee remarks
+  // Pull budget amount and reason from the committee remarks payload.
   const parseBudgetDetails = (remarks) => {
     if (!remarks) return { amount: '', reason: '' };
     const lines = String(remarks).split('\n\n');
@@ -166,8 +212,44 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
     return { amount, reason };
   };
 
+  const isUrgentComplaint = (record) => {
+    const value = String(record?.UrgentComplaint ?? record?.urgentComplaint ?? '').toLowerCase();
+    return value === '1' || value === 'true' || value === 'urgent';
+  };
+
+  const effectiveUrgentWorkflow = typeof urgentWorkflowProp === 'boolean' ? urgentWorkflowProp : localEnableUrgentWorkflow;
+  const urgentRequests = budgetRequests.filter(isUrgentComplaint);
+
+  const getFilteredRequests = () => {
+    if (viewMode === 'urgent') return urgentRequests;
+    return budgetRequests;
+  };
+
+  const renderUrgencyBadge = (record) => {
+    if (!isUrgentComplaint(record)) return null;
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '4px 10px',
+          borderRadius: '999px',
+          backgroundColor: '#fee2e2',
+          color: '#991b1b',
+          fontSize: '12px',
+          fontWeight: '700',
+          marginLeft: '8px',
+        }}
+      >
+        URGENT
+      </span>
+    );
+  };
+
   const handleApprove = async () => {
     if (!selectedRequest?.Id) return;
+    if (onBeforeApprove && !onBeforeApprove(selectedRequest)) return;
     try {
       setProcessingId(selectedRequest.Id);
       await approveBudgetRequest(selectedRequest.Id, user.cnic, approvalComments);
@@ -182,6 +264,7 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
         return status === 'pending';
       });
       setBudgetRequests(pending);
+      if (typeof onApproved === 'function') onApproved();
     } catch (err) {
       alert('Error approving budget: ' + err.message);
     } finally {
@@ -243,20 +326,23 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
     }
   };
 
-  const renderRequestsList = () => {
-    if (budgetRequests.length === 0) {
+  const renderRequestsList = (requests) => {
+    if (requests.length === 0) {
       return (
         <div style={{ ...cardStyle, textAlign: 'center', color: '#64748b', padding: '30px' }}>
           <div style={{ fontSize: '40px', marginBottom: '12px' }}>✓</div>
-          No pending budget requests
+          {viewMode === 'urgent' ? 'No urgent budget requests' : 'No pending budget requests'}
         </div>
       );
     }
 
     return (
       <div>
-        {budgetRequests.map((request) => {
-          const budgetDetails = parseBudgetDetails(request.CommitteeRemarks);
+        {requests
+          .slice()
+          .sort((a, b) => Number(isUrgentComplaint(b)) - Number(isUrgentComplaint(a)))
+          .map((request) => {
+            const budgetDetails = parseBudgetDetails(request.CommitteeRemarks);
           const isSelected = selectedRequest?.Id === request.Id;
           
           return (
@@ -275,9 +361,12 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                 <div>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '700', color: '#111827' }}>
-                    {request.Category || 'Budget Request'}
-                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: '0', fontSize: '18px', fontWeight: '700', color: '#111827' }}>
+                      {request.Category || 'Budget Request'}
+                    </h3>
+                    {renderUrgencyBadge(request)}
+                  </div>
                   <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#475569', lineHeight: 1.5 }}>
                     {request.Description || 'No description'}
                   </p>
@@ -310,7 +399,7 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
 
     return (
       <div style={{ ...cardStyle, marginTop: '20px', backgroundColor: '#ffffff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <button
             onClick={() => {
               setSelectedRequest(null);
@@ -324,6 +413,7 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
           <h2 style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: '#111827' }}>
             Budget Request Review
           </h2>
+          {renderUrgencyBadge(selectedRequest)}
         </div>
 
         {/* Complaint Details */}
@@ -417,6 +507,7 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
             <button
               onClick={() => {
+                if (onBeforeApprove && !onBeforeApprove(selectedRequest)) return;
                 setApprovalAction('approve');
                 setApprovalComments('');
                 setShowApprovalForm(true);
@@ -577,10 +668,33 @@ const PresidentBudgetRequests = ({ user, nhcCode, onBack }) => {
       {/* Content */}
       {!loading && !selectedRequest && (
         <div>
+          {/* URGENT WORKFLOW ALERT */}
+          {effectiveUrgentWorkflow && urgentBudgetRequests.length > 0 && viewMode !== 'urgent' && (
+            <div style={{
+              backgroundColor: '#fee2e2',
+              border: '2px solid #dc2626',
+              color: '#991b1b',
+              padding: '16px',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              fontSize: '15px',
+              fontWeight: 'bold'
+            }}>
+              ⚠️ <strong>{urgentBudgetRequests.length} URGENT budget request(s) need approval first!</strong> Please review and approve urgent requests before others.
+            </div>
+          )}
+          <div style={tabsStyle}>
+            <button style={tabStyle(viewMode === 'pending')} onClick={() => setViewMode('pending')}>
+              Pending ({budgetRequests.length})
+            </button>
+            <button style={tabStyle(viewMode === 'urgent')} onClick={() => setViewMode('urgent')}>
+              Urgent ({urgentRequests.length})
+            </button>
+          </div>
           <h2 style={{ margin: '0 0 12px 0', fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
-            Pending Budget Requests ({budgetRequests.length})
+            {viewMode === 'urgent' ? 'Urgent Budget Requests' : 'Pending Budget Requests'}
           </h2>
-          {renderRequestsList()}
+          {renderRequestsList(getFilteredRequests())}
         </div>
       )}
 
